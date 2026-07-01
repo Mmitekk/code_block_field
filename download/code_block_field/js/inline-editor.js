@@ -220,6 +220,126 @@
       opacity: 1;
       transform: scale(1.1);
     }
+
+    /* ===== WYSIWYG floating toolbar (inside shadow DOM, attached to body) ===== */
+    /* The toolbar is created in the light DOM (so it can be positioned relative
+       to the viewport) but visually appears above the selection. See
+       showFormatToolbar() in inline-editor.js. */
+
+    /* Image resize handles */
+    .cbf-img-resizing {
+      outline: 2px solid var(--cbf-edit-outline, #ff8a3d) !important;
+      position: relative;
+    }
+    .cbf-img-resize-handle {
+      position: absolute;
+      width: 12px;
+      height: 12px;
+      background: var(--cbf-edit-outline, #ff8a3d);
+      border: 2px solid #fff;
+      border-radius: 50%;
+      cursor: nwse-resize;
+      z-index: 10;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+    }
+    .cbf-img-resize-handle--br {
+      right: -6px;
+      bottom: -6px;
+      cursor: nwse-resize;
+    }
+    .cbf-img-resize-handle--bl {
+      left: -6px;
+      bottom: -6px;
+      cursor: nesw-resize;
+    }
+
+    /* Context menu for images */
+    .cbf-img-context-menu {
+      position: absolute;
+      background: #1e1e2e;
+      color: #fff;
+      border-radius: 6px;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+      padding: 4px;
+      z-index: 99998;
+      font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      min-width: 180px;
+    }
+    .cbf-img-context-menu__item {
+      display: block;
+      width: 100%;
+      padding: 6px 12px;
+      background: transparent;
+      color: #fff;
+      border: none;
+      cursor: pointer;
+      border-radius: 4px;
+      text-align: left;
+    }
+    .cbf-img-context-menu__item:hover {
+      background: rgba(255,255,255,0.12);
+    }
+    .cbf-img-context-menu__item--danger {
+      color: #ff6b6b;
+    }
+    .cbf-img-context-menu__sep {
+      height: 1px;
+      background: rgba(255,255,255,0.12);
+      margin: 4px 0;
+    }
+
+    /* Alt-edit popup */
+    .cbf-alt-editor {
+      position: absolute;
+      background: #fff;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      padding: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      z-index: 99998;
+      font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      max-width: 320px;
+    }
+    .cbf-alt-editor__input {
+      display: block;
+      width: 100%;
+      padding: 4px 8px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 13px;
+      margin-bottom: 6px;
+      box-sizing: border-box;
+    }
+    .cbf-alt-editor__btn {
+      padding: 4px 10px;
+      background: var(--cbf-edit-outline, #ff8a3d);
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    /* "Insert image" button */
+    .cbf-insert-img-btn {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      background: var(--cbf-edit-outline, #ff8a3d);
+      color: #fff;
+      border: none;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 18px;
+      line-height: 1;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+      z-index: 5;
+    }
+    .cbf-insert-img-btn:hover {
+      transform: scale(1.1);
+    }
   `;
 
   function injectShadowStyles(root) {
@@ -266,20 +386,31 @@
       el.addEventListener('input', onEditableInput.bind(null, host));
       el.addEventListener('focus', onEditableFocus.bind(null, host));
       el.addEventListener('blur', onEditableBlur);
+      // Show the WYSIWYG toolbar when the user selects text inside this element.
+      el.addEventListener('mouseup', onEditableSelectionChange.bind(null, host));
+      el.addEventListener('keyup', onEditableSelectionChange.bind(null, host));
     });
 
-    // Image overlays.
+    // Listen for selection changes globally (covers keyboard selection
+    // across multiple editable elements within the same shadow root).
+    document.addEventListener('selectionchange', onSelectionChangeGlobal);
+
+    // Image overlays + resize handles + context menu + alt editor.
     root.querySelectorAll('img[data-cbf-asset]').forEach(function (img) {
       if (img.dataset.cbfOverlayAttached) {
         return;
       }
       img.dataset.cbfOverlayAttached = '1';
       img.classList.add('cbf-editable-image');
-      img.addEventListener('click', function (e) {
-        e.preventDefault();
-        e.stopPropagation();
-        openImagePicker(host, img);
-      });
+      attachImageEditing(host, img);
+    });
+    // Also allow non-asset images to be resized + alt-edited (but not replaced).
+    root.querySelectorAll('img:not([data-cbf-asset])').forEach(function (img) {
+      if (img.dataset.cbfOverlayAttached) {
+        return;
+      }
+      img.dataset.cbfOverlayAttached = '1';
+      attachImageEditing(host, img, { noReplace: true });
     });
 
     // Link editor handles.
@@ -318,6 +449,22 @@
       }
     });
 
+    // "Insert image" floating button (per block).
+    if (!host.querySelector('.cbf-insert-img-btn')) {
+      const insertBtn = document.createElement('button');
+      insertBtn.type = 'button';
+      insertBtn.className = 'cbf-insert-img-btn';
+      insertBtn.title = Drupal.t('Insert image');
+      insertBtn.textContent = '+';
+      insertBtn.setAttribute('contenteditable', 'false');
+      insertBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        insertNewImage(host);
+      });
+      host.appendChild(insertBtn);
+    }
+
     setHint(Drupal.t('Editing “%s”.', { '%s': getInstanceId(host) }));
   }
 
@@ -345,7 +492,18 @@
     root.querySelectorAll('img[data-cbf-overlay-attached]').forEach(function (img) {
       delete img.dataset.cbfOverlayAttached;
       img.classList.remove('cbf-editable-image');
+      img.classList.remove('cbf-img-resizing');
     });
+    // Remove image resize handles.
+    root.querySelectorAll('.cbf-img-resize-handle').forEach(function (h) {
+      h.parentNode && h.parentNode.removeChild(h);
+    });
+    // Remove insert-image button.
+    host.querySelectorAll('.cbf-insert-img-btn').forEach(function (b) {
+      b.parentNode && b.parentNode.removeChild(b);
+    });
+    // Hide any open context menus / alt editors / format toolbar.
+    closeAllPopups();
   }
 
   function onEditableInput(host, e) {
@@ -363,6 +521,625 @@
     document.querySelectorAll('.cbf-host--focused').forEach(function (h) {
       h.classList.remove('cbf-host--focused');
     });
+    // Delay hiding the format toolbar so that clicking a button on it
+    // does not lose the selection first.
+    setTimeout(function () {
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
+        // Don't hide if focus moved to the toolbar itself.
+        if (!formatToolbar || !formatToolbar.contains(document.activeElement)) {
+          hideFormatToolbar();
+        }
+      }
+    }, 200);
+  }
+
+  function onEditableSelectionChange(host) {
+    if (!state.active) {
+      return;
+    }
+    // Use a small timeout so the browser has time to update the selection
+    // after the mouseup/keyup event.
+    setTimeout(function () {
+      showFormatToolbar(host);
+    }, 10);
+  }
+
+  function onSelectionChangeGlobal() {
+    if (!state.active) {
+      return;
+    }
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
+      // Selection collapsed — hide the toolbar unless focus is on it.
+      if (!formatToolbar || !formatToolbar.contains(document.activeElement)) {
+        hideFormatToolbar();
+      }
+      return;
+    }
+    // Determine which host the selection belongs to by checking ancestors.
+    let node = sel.anchorNode;
+    if (node && node.nodeType === Node.TEXT_NODE) {
+      node = node.parentNode;
+    }
+    while (node && node.nodeType === Node.ELEMENT_NODE) {
+      if (node.host && node.host.classList && node.host.classList.contains('cbf-host')) {
+        // node is a shadow root; show toolbar for its host.
+        showFormatToolbar(node.host);
+        return;
+      }
+      if (node.classList && node.classList.contains('cbf-host')) {
+        showFormatToolbar(node);
+        return;
+      }
+      node = node.parentNode;
+    }
+    // Selection not inside a code block — hide the toolbar.
+    hideFormatToolbar();
+  }
+
+  // Close popups on outside click.
+  document.addEventListener('mousedown', function (e) {
+    if (!state.active) {
+      return;
+    }
+    if (e.target.closest && (e.target.closest('.cbf-img-context-menu') || e.target.closest('.cbf-alt-editor') || e.target.closest('.cbf-format-toolbar'))) {
+      return;
+    }
+    closeAllPopups();
+  });
+
+  // Reposition resize handles on window scroll/resize.
+  window.addEventListener('scroll', function () {
+    if (!state.active) {
+      return;
+    }
+    document.querySelectorAll('.cbf-img-resize-handle').forEach(function (h) {
+      // Find the img this handle belongs to — it was appended as a sibling.
+      const img = h.previousElementSibling && h.previousElementSibling.tagName === 'IMG'
+        ? h.previousElementSibling
+        : (h.nextElementSibling && h.nextElementSibling.tagName === 'IMG' ? h.nextElementSibling : null);
+      if (img) {
+        const corner = h.classList.contains('cbf-img-resize-handle--br') ? 'br' : 'bl';
+        positionImageHandle(h, img, corner);
+      }
+    });
+  }, { passive: true });
+
+  // -- WYSIWYG floating toolbar ---------------------------------------------
+
+  /**
+   * Floating format toolbar shown above the current selection inside an
+   * editable element. Lives in the light DOM (so it can be positioned
+   * relative to the viewport) but its buttons act on the selection inside
+   * the shadow root.
+   */
+  let formatToolbar = null;
+  let currentEditHost = null;        // the .cbf-host that owns the current selection
+  let currentEditRoot = null;        // the shadow root of that host
+
+  function buildFormatToolbar() {
+    if (formatToolbar) {
+      return;
+    }
+    formatToolbar = document.createElement('div');
+    formatToolbar.className = 'cbf-format-toolbar';
+    formatToolbar.setAttribute('role', 'toolbar');
+    formatToolbar.setAttribute('contenteditable', 'false');
+    formatToolbar.style.display = 'none';
+    formatToolbar.innerHTML = `
+      <button type="button" data-cmd="bold" title="${Drupal.t('Bold')}" aria-label="${Drupal.t('Bold')}"><b>B</b></button>
+      <button type="button" data-cmd="italic" title="${Drupal.t('Italic')}" aria-label="${Drupal.t('Italic')}"><i>I</i></button>
+      <button type="button" data-cmd="underline" title="${Drupal.t('Underline')}" aria-label="${Drupal.t('Underline')}"><u>U</u></button>
+      <button type="button" data-cmd="strikeThrough" title="${Drupal.t('Strikethrough')}" aria-label="${Drupal.t('Strikethrough')}"><s>S</s></button>
+      <span class="cbf-format-toolbar__sep"></span>
+      <button type="button" data-block="h2" title="H2"><b>H2</b></button>
+      <button type="button" data-block="h3" title="H3"><b>H3</b></button>
+      <button type="button" data-block="h4" title="H4"><b>H4</b></button>
+      <button type="button" data-block="p" title="${Drupal.t('Paragraph')}">¶</button>
+      <span class="cbf-format-toolbar__sep"></span>
+      <button type="button" data-cmd="justifyLeft" title="${Drupal.t('Align left')}">⬅</button>
+      <button type="button" data-cmd="justifyCenter" title="${Drupal.t('Align center')}">⬌</button>
+      <button type="button" data-cmd="justifyRight" title="${Drupal.t('Align right')}">➡</button>
+      <button type="button" data-cmd="justifyFull" title="${Drupal.t('Justify')}">☰</button>
+      <span class="cbf-format-toolbar__sep"></span>
+      <button type="button" data-cmd="insertUnorderedList" title="${Drupal.t('Bulleted list')}">•</button>
+      <button type="button" data-cmd="insertOrderedList" title="${Drupal.t('Numbered list')}">1.</button>
+      <span class="cbf-format-toolbar__sep"></span>
+      <label class="cbf-format-toolbar__color" title="${Drupal.t('Text color')}">
+        <span class="cbf-format-toolbar__color-icon">A</span>
+        <input type="color" data-cmd="foreColor" value="#000000">
+      </label>
+      <span class="cbf-format-toolbar__sep"></span>
+      <button type="button" data-cmd="createLink" title="${Drupal.t('Link')}">🔗</button>
+      <button type="button" data-cmd="removeFormat" title="${Drupal.t('Clear formatting')}">⌫</button>
+    `;
+    document.body.appendChild(formatToolbar);
+
+    formatToolbar.addEventListener('mousedown', function (e) {
+      // Prevent the selection from collapsing when the user clicks a button.
+      if (e.target.tagName !== 'INPUT' || e.target.type !== 'color') {
+        e.preventDefault();
+      }
+    });
+
+    formatToolbar.querySelectorAll('button[data-cmd]').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        const cmd = btn.getAttribute('data-cmd');
+        runFormatCommand(cmd, btn);
+      });
+    });
+
+    formatToolbar.querySelectorAll('button[data-block]').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        const tag = btn.getAttribute('data-block');
+        runBlockCommand(tag);
+      });
+    });
+
+    const colorInput = formatToolbar.querySelector('input[data-cmd="foreColor"]');
+    if (colorInput) {
+      colorInput.addEventListener('input', function (e) {
+        runFormatCommand('foreColor', null, e.target.value);
+      });
+    }
+  }
+
+  function showFormatToolbar(host) {
+    buildFormatToolbar();
+    currentEditHost = host;
+    const entry = getRegistryEntry(host);
+    currentEditRoot = entry ? entry.shadowRoot : null;
+    if (!currentEditRoot) {
+      return;
+    }
+    const sel = currentEditRoot.getSelection ? currentEditRoot.getSelection() : window.getSelection();
+    if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
+      hideFormatToolbar();
+      return;
+    }
+    const range = sel.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+    if (!rect || (rect.width === 0 && rect.height === 0)) {
+      hideFormatToolbar();
+      return;
+    }
+    formatToolbar.style.display = 'flex';
+    const toolbarRect = formatToolbar.getBoundingClientRect();
+    let top = rect.top - toolbarRect.height - 6;
+    let left = rect.left + (rect.width / 2) - (toolbarRect.width / 2);
+    if (top < 4) {
+      top = rect.bottom + 6;
+    }
+    if (left < 4) {
+      left = 4;
+    }
+    if (left + toolbarRect.width > window.innerWidth - 4) {
+      left = window.innerWidth - toolbarRect.width - 4;
+    }
+    formatToolbar.style.top = top + 'px';
+    formatToolbar.style.left = left + 'px';
+    updateToolbarState();
+  }
+
+  function hideFormatToolbar() {
+    if (formatToolbar) {
+      formatToolbar.style.display = 'none';
+    }
+    currentEditHost = null;
+    currentEditRoot = null;
+  }
+
+  function updateToolbarState() {
+    if (!formatToolbar || !currentEditRoot) {
+      return;
+    }
+    ['bold', 'italic', 'underline', 'strikeThrough'].forEach(function (cmd) {
+      const btn = formatToolbar.querySelector('button[data-cmd="' + cmd + '"]');
+      if (!btn) {
+        return;
+      }
+      try {
+        if (document.queryCommandState) {
+          const active = document.queryCommandState(cmd);
+          btn.classList.toggle('is-active', active);
+        }
+      } catch (e) {
+        // queryCommandState can throw on cross-shadow-root selections in
+        // some browsers; ignore.
+      }
+    });
+  }
+
+  /**
+   * Runs an execCommand on the current selection inside the shadow root.
+   * execCommand is deprecated but still works in all current browsers
+   * and is the only API that operates on selections inside shadow DOM
+   * without resorting to manual Range surgery.
+   */
+  function runFormatCommand(cmd, btn, value) {
+    if (!currentEditRoot) {
+      return;
+    }
+    // Restore focus to the editable element so execCommand targets the
+    // right selection.
+    const sel = currentEditRoot.getSelection ? currentEditRoot.getSelection() : window.getSelection();
+    if (!sel || sel.rangeCount === 0) {
+      return;
+    }
+    // For createLink, use the existing link picker modal instead of
+    // execCommand's prompt().
+    if (cmd === 'createLink') {
+      const range = sel.getRangeAt(0);
+      if (!range || range.collapsed) {
+        return;
+      }
+      // Find an existing <a> in the selection to edit, or create one.
+      let a = null;
+      let node = range.commonAncestorContainer;
+      if (node.nodeType === Node.TEXT_NODE) {
+        node = node.parentNode;
+      }
+      if (node && node.closest) {
+        a = node.closest('a');
+      }
+      if (!a) {
+        // Wrap selection in a temporary <a> so the picker can edit it.
+        a = document.createElement('a');
+        a.href = '#';
+        try {
+          range.surroundContents(a);
+        } catch (err) {
+          return;
+        }
+      }
+      if (currentEditHost && a) {
+        openLinkPicker(currentEditHost, a);
+      }
+      markDirty(currentEditHost);
+      hideFormatToolbar();
+      return;
+    }
+    try {
+      // execCommand needs focus inside the document; for shadow DOM,
+      // Chromium supports it but Firefox needs activeElement inside the root.
+      document.execCommand(cmd, false, value || null);
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn('execCommand ' + cmd + ' failed:', e);
+    }
+    markDirty(currentEditHost);
+    updateToolbarState();
+  }
+
+  /**
+   * Converts the current block-level element of the selection to the given
+   * tag (h2/h3/h4/p). Uses document.execCommand('formatBlock', ...).
+   */
+  function runBlockCommand(tag) {
+    if (!currentEditRoot) {
+      return;
+    }
+    try {
+      // formatBlock needs the tag name wrapped in <>. Some browsers accept
+      // the bare name too, but the angle brackets are safest.
+      document.execCommand('formatBlock', false, '<' + tag + '>');
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn('formatBlock ' + tag + ' failed:', e);
+    }
+    markDirty(currentEditHost);
+    updateToolbarState();
+  }
+
+  function markDirty(host) {
+    if (!host) {
+      return;
+    }
+    const instanceId = getInstanceId(host);
+    state.dirty.add(instanceId);
+    host.classList.add('cbf-host--dirty');
+    updateSaveButton();
+  }
+
+  // -- Image editing helpers (resize / context menu / alt / insert) --------
+
+  function attachImageEditing(host, img, opts) {
+    opts = opts || {};
+    img.addEventListener('click', function (e) {
+      if (!state.active) {
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      // Single click selects the image and shows resize handles.
+      selectImage(host, img);
+    });
+
+    img.addEventListener('contextmenu', function (e) {
+      if (!state.active) {
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      showImageContextMenu(host, img, e, opts);
+    });
+
+    img.addEventListener('dblclick', function (e) {
+      if (!state.active) {
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      // Double-click on the image itself = replace (if asset) or edit alt.
+      if (opts.noReplace) {
+        editImageAltOnTheSpot(host, img);
+      } else {
+        openImagePicker(host, img);
+      }
+    });
+  }
+
+  function selectImage(host, img) {
+    const entry = getRegistryEntry(host);
+    if (!entry || !entry.shadowRoot) {
+      return;
+    }
+    // Deselect previous.
+    entry.shadowRoot.querySelectorAll('.cbf-img-resizing').forEach(function (el) {
+      el.classList.remove('cbf-img-resizing');
+      el.querySelectorAll('.cbf-img-resize-handle').forEach(function (h) {
+        h.parentNode && h.parentNode.removeChild(h);
+      });
+    });
+    img.classList.add('cbf-img-resizing');
+    // Add bottom-right and bottom-left resize handles.
+    ['br', 'bl'].forEach(function (corner) {
+      const handle = document.createElement('div');
+      handle.className = 'cbf-img-resize-handle cbf-img-resize-handle--' + corner;
+      handle.setAttribute('contenteditable', 'false');
+      img.appendChild ? null : null;
+      // Insert as sibling of img if img cannot have children (e.g. <img>).
+      if (img.parentNode) {
+        img.parentNode.appendChild(handle);
+        // Position the handle relative to the image using a wrapper trick:
+        // we can't wrap <img> in another element easily, so position the
+        // handle absolutely based on img.getBoundingClientRect().
+        positionImageHandle(handle, img, corner);
+      }
+      setupImageResize(handle, img, corner, host);
+    });
+  }
+
+  function positionImageHandle(handle, img, corner) {
+    const rect = img.getBoundingClientRect();
+    const root = handle.ownerDocument;
+    // The handle lives in the shadow root; we use fixed positioning based
+    // on the viewport-relative rect of the image.
+    handle.style.position = 'fixed';
+    handle.style.top = (corner === 'br' ? rect.bottom - 6 : rect.bottom - 6) + 'px';
+    if (corner === 'br') {
+      handle.style.left = '';
+      handle.style.right = (window.innerWidth - rect.right - 6) + 'px';
+    } else {
+      handle.style.left = (rect.left - 6) + 'px';
+      handle.style.right = '';
+    }
+  }
+
+  function setupImageResize(handle, img, corner, host) {
+    let startX = 0;
+    let startY = 0;
+    let startWidth = 0;
+    let startHeight = 0;
+    let dragging = false;
+
+    handle.addEventListener('mousedown', function (e) {
+      if (!state.active) {
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      dragging = true;
+      startX = e.clientX;
+      startY = e.clientY;
+      startWidth = img.offsetWidth;
+      startHeight = img.offsetHeight;
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+
+    function onMove(e) {
+      if (!dragging) {
+        return;
+      }
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      // Use the larger delta to keep aspect ratio roughly intact.
+      let newWidth = startWidth;
+      if (corner === 'br') {
+        newWidth = Math.max(40, startWidth + dx);
+      } else {
+        newWidth = Math.max(40, startWidth - dx);
+      }
+      const ratio = startHeight / startWidth;
+      img.style.width = newWidth + 'px';
+      img.style.height = Math.round(newWidth * ratio) + 'px';
+      // Re-position the handle.
+      positionImageHandle(handle, img, corner);
+    }
+
+    function onUp() {
+      dragging = false;
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      markDirty(host);
+    }
+  }
+
+  function showImageContextMenu(host, img, e, opts) {
+    closeAllPopups();
+    const menu = document.createElement('div');
+    menu.className = 'cbf-img-context-menu';
+    menu.setAttribute('contenteditable', 'false');
+    const items = [];
+    if (!opts || !opts.noReplace) {
+      items.push({ label: Drupal.t('Replace image'), action: function () { openImagePicker(host, img); } });
+      items.push({ label: Drupal.t('Upload from URL…'), action: function () { uploadFromUrl(host, img); } });
+    }
+    items.push({ label: Drupal.t('Edit alt text'), action: function () { editImageAltOnTheSpot(host, img); } });
+    items.push({ sep: true });
+    items.push({ label: Drupal.t('Reset size'), action: function () {
+      img.style.width = '';
+      img.style.height = '';
+      markDirty(host);
+    } });
+    items.push({ sep: true });
+    items.push({ label: Drupal.t('Delete image'), danger: true, action: function () {
+      img.parentNode && img.parentNode.removeChild(img);
+      markDirty(host);
+    } });
+
+    items.forEach(function (item) {
+      if (item.sep) {
+        const sep = document.createElement('div');
+        sep.className = 'cbf-img-context-menu__sep';
+        menu.appendChild(sep);
+        return;
+      }
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'cbf-img-context-menu__item' + (item.danger ? ' cbf-img-context-menu__item--danger' : '');
+      btn.textContent = item.label;
+      btn.addEventListener('click', function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        closeAllPopups();
+        item.action();
+      });
+      menu.appendChild(btn);
+    });
+
+    document.body.appendChild(menu);
+    menu.style.position = 'fixed';
+    menu.style.top = e.clientY + 'px';
+    menu.style.left = e.clientX + 'px';
+    // Adjust if overflowing.
+    const rect = menu.getBoundingClientRect();
+    if (rect.right > window.innerWidth - 4) {
+      menu.style.left = (window.innerWidth - rect.width - 4) + 'px';
+    }
+    if (rect.bottom > window.innerHeight - 4) {
+      menu.style.top = (window.innerHeight - rect.height - 4) + 'px';
+    }
+  }
+
+  function editImageAltOnTheSpot(host, img) {
+    closeAllPopups();
+    const popup = document.createElement('div');
+    popup.className = 'cbf-alt-editor';
+    popup.setAttribute('contenteditable', 'false');
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'cbf-alt-editor__input';
+    input.value = img.getAttribute('alt') || '';
+    input.placeholder = Drupal.t('Alt text (for accessibility)');
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'cbf-alt-editor__btn';
+    btn.textContent = Drupal.t('Save');
+    btn.addEventListener('click', function (ev) {
+      ev.preventDefault();
+      img.setAttribute('alt', input.value);
+      closeAllPopups();
+      markDirty(host);
+    });
+    input.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter') {
+        ev.preventDefault();
+        btn.click();
+      } else if (ev.key === 'Escape') {
+        ev.preventDefault();
+        closeAllPopups();
+      }
+    });
+    popup.appendChild(input);
+    popup.appendChild(btn);
+    document.body.appendChild(popup);
+    const rect = img.getBoundingClientRect();
+    popup.style.position = 'fixed';
+    popup.style.top = (rect.bottom + 6) + 'px';
+    popup.style.left = Math.max(4, rect.left) + 'px';
+    input.focus();
+    input.select();
+  }
+
+  function uploadFromUrl(host, img) {
+    closeAllPopups();
+    const url = window.prompt(Drupal.t('Image URL (https://…)'), img.getAttribute('src') || '');
+    if (!url) {
+      return;
+    }
+    img.setAttribute('src', url);
+    // If the image is a managed asset, switching to an external URL would
+    // break the file usage — clear the data-cbf-asset attribute so the
+    // save controller treats it as an external image.
+    if (img.hasAttribute('data-cbf-asset')) {
+      img.removeAttribute('data-cbf-asset');
+    }
+    markDirty(host);
+  }
+
+  function insertNewImage(host) {
+    if (!state.active) {
+      return;
+    }
+    const entry = getRegistryEntry(host);
+    if (!entry || !entry.shadowRoot) {
+      return;
+    }
+    const root = entry.shadowRoot;
+    // Generate a unique asset key.
+    const key = 'asset-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
+    // Find a sensible insertion point: the currently-focused element, or
+    // the first editable text element, or just append to the wrapper.
+    let target = root.querySelector('.cbf-shadow-content');
+    const sel = root.getSelection ? root.getSelection() : window.getSelection();
+    if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+      const range = sel.getRangeAt(0);
+      const img = document.createElement('img');
+      img.setAttribute('data-cbf-asset', key);
+      img.setAttribute('src', '/core/misc/placeholder.svg');
+      img.setAttribute('alt', '');
+      img.style.maxWidth = '100%';
+      range.insertNode(img);
+      // Immediately open the picker so the user can upload a real file.
+      selectImage(host, img);
+      setTimeout(function () { openImagePicker(host, img); }, 100);
+      markDirty(host);
+      return;
+    }
+    // No selection — append at the end of the content wrapper.
+    const img = document.createElement('img');
+    img.setAttribute('data-cbf-asset', key);
+    img.setAttribute('src', '/core/misc/placeholder.svg');
+    img.setAttribute('alt', '');
+    img.style.maxWidth = '100%';
+    img.style.display = 'block';
+    img.style.margin = '1em auto';
+    target.appendChild(img);
+    selectImage(host, img);
+    setTimeout(function () { openImagePicker(host, img); }, 100);
+    markDirty(host);
+  }
+
+  function closeAllPopups() {
+    document.querySelectorAll('.cbf-img-context-menu, .cbf-alt-editor').forEach(function (el) {
+      el.parentNode && el.parentNode.removeChild(el);
+    });
+    hideFormatToolbar();
   }
 
   // -- Image picker -----------------------------------------------------------
@@ -477,6 +1254,20 @@
     clone.querySelectorAll('.cbf-editable-link').forEach(function (el) {
       el.classList.remove('cbf-editable-link');
     });
+    // Remove resize handles (they are siblings of the img, not children).
+    clone.querySelectorAll('.cbf-img-resize-handle').forEach(function (h) {
+      h.parentNode && h.parentNode.removeChild(h);
+    });
+    clone.querySelectorAll('.cbf-img-resizing').forEach(function (el) {
+      el.classList.remove('cbf-img-resizing');
+    });
+    // Strip inline width/height styles added by resize handles ONLY if the
+    // image still has natural dimensions. We keep the style if it was set
+    // originally by the author — there is no reliable way to tell the
+    // difference, so we keep the resized size (which is what the user
+    // intended).
+    // NOTE: this means resize persists in the saved HTML, which is the
+    // desired behaviour.
 
     const html = clone.innerHTML;
     // Build assets map from <img data-cbf-asset="key">.

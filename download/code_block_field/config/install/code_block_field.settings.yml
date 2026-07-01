@@ -1,10 +1,12 @@
-allowed_html: '<a href hreflang target rel title class data-*> <em> <strong> <b> <i> <u> <s> <code> <pre> <blockquote> <br> <p class> <h1 class> <h2 class> <h3 class> <h4 class> <h5 class> <h6 class> <ul type class> <ol type class start> <li class> <dl class> <dt> <dd> <table class> <thead> <tbody> <tfoot> <tr> <td colspan rowspan class> <th colspan rowspan class> <caption> <div class id data-*> <span class id data-*> <img src alt title width height class data-*> <picture> <source srcset media> <figure class> <figcaption> <section class> <article class> <header class> <footer class> <nav class> <main class> <aside class> <video src controls width height> <audio src controls> <iframe src width height frameborder allowfullscreen> <svg class viewBox xmlns width height> <use href> <path d> <circle cx cy r> <rect x y width height> <line x1 y1 x2 y2> <polyline points> <polygon points>'
+allowed_html: '<a href hreflang target rel title class data-*> <em> <strong> <b> <i> <u> <s> <code> <pre> <blockquote> <br> <p class style> <h1 class style> <h2 class style> <h3 class style> <h4 class style> <h5 class style> <h6 class style> <ul type class style> <ol type class start style> <li class style> <dl class> <dt> <dd> <table class style> <thead> <tbody> <tfoot> <tr style> <td colspan rowspan class style> <th colspan rowspan class style> <caption> <div class id style data-*> <span class id style data-*> <img src alt title width height class style data-*> <picture> <source srcset media> <figure class style> <figcaption> <section class style> <article class style> <header class style> <footer class style> <nav class style> <main class style> <aside class style> <video src controls width height style> <audio src controls style> <iframe src width height frameborder allowfullscreen style> <svg class viewBox xmlns width height style> <use href> <path d> <circle cx cy r> <rect x y width height> <line x1 y1 x2 y2> <polyline points> <polygon points>'
 filter_html: true
 default_image_style: ''
 upload_location: 'public://code-block-field'
 max_filesize: '5 MB'
 shadow_mode: 'open'
 expose_edit_button: true
+create_revisions: false
+revision_log_message: 'Inline edit (%date)'
 color_toolbar_bg: '#1e1e2e'
 color_toolbar_accent: '#ff8a3d'
 color_edit_outline: '#ff8a3d'

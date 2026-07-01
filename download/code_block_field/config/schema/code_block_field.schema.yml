@@ -23,6 +23,12 @@ code_block_field.settings:
     expose_edit_button:
       type: boolean
       label: 'Show the floating Edit Mode button on every page where Code Block fields are present'
+    create_revisions:
+      type: boolean
+      label: 'Create a new entity revision on every inline save'
+    revision_log_message:
+      type: string
+      label: 'Default revision log message (used when create_revisions is on)'
     color_toolbar_bg:
       type: string
       label: 'Inline-editor toolbar background colour'
