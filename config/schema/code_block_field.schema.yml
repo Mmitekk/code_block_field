@@ -1,0 +1,25 @@
+code_block_field.settings:
+  type: config_object
+  label: 'Code Block Field settings'
+  mapping:
+    allowed_html:
+      type: string
+      label: 'Allowed HTML tags (space-separated, with optional attributes)'
+    filter_html:
+      type: boolean
+      label: 'Run HTML filtering on save'
+    default_image_style:
+      type: string
+      label: 'Default image style for inline-rendered images'
+    upload_location:
+      type: string
+      label: 'Upload destination URI scheme (e.g. public://code-block-field)'
+    max_filesize:
+      type: string
+      label: 'Maximum upload filesize (e.g. 5 MB)'
+    shadow_mode:
+      type: string
+      label: 'Shadow DOM mode (open | closed)'
+    expose_edit_button:
+      type: boolean
+      label: 'Show the floating Edit Mode button on every page where Code Block fields are present'

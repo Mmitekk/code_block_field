@@ -1,0 +1,7 @@
+allowed_html: '<a href hreflang target rel title class data-*> <em> <strong> <b> <i> <u> <s> <code> <pre> <blockquote> <br> <p class> <h1 class> <h2 class> <h3 class> <h4 class> <h5 class> <h6 class> <ul type class> <ol type class start> <li class> <dl class> <dt> <dd> <table class> <thead> <tbody> <tfoot> <tr> <td colspan rowspan class> <th colspan rowspan class> <caption> <div class id data-*> <span class id data-*> <img src alt title width height class data-*> <picture> <source srcset media> <figure class> <figcaption> <section class> <article class> <header class> <footer class> <nav class> <main class> <aside class> <video src controls width height> <audio src controls> <iframe src width height frameborder allowfullscreen> <svg class viewBox xmlns width height> <use href> <path d> <circle cx cy r> <rect x y width height> <line x1 y1 x2 y2> <polyline points> <polygon points>'
+filter_html: true
+default_image_style: ''
+upload_location: 'public://code-block-field'
+max_filesize: '5 MB'
+shadow_mode: 'open'
+expose_edit_button: true

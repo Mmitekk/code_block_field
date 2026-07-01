@@ -1,0 +1,153 @@
+/**
+ * Inline editor visual chrome.
+ *
+ *  - Floating toolbar (top-right) shown on pages where the inline editor
+ *    is enabled.
+ *  - Visual affordances for editable text / images / links inside the
+ *    Shadow DOM.
+ *  - Hover outlines, dirty indicators, focus rings.
+ */
+
+/* ------------------------------------------------------------------ */
+/* Floating toolbar                                                    */
+/* ------------------------------------------------------------------ */
+
+.cbf-inline-toolbar {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #1e1e2e;
+  color: #fff;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(15, 17, 32, 0.35);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 13px;
+}
+
+.cbf-inline-toolbar__brand {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding-right: 8px;
+  border-right: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.cbf-inline-toolbar__dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ff8a3d;
+}
+
+.cbf-inline-toolbar__btn {
+  appearance: none;
+  -webkit-appearance: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.cbf-inline-toolbar__btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+.cbf-inline-toolbar__btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.cbf-inline-toolbar__btn--primary.is-active {
+  background: #ff8a3d;
+  border-color: #ff8a3d;
+  color: #1e1e2e;
+  font-weight: 600;
+}
+
+.cbf-inline-toolbar__hint {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 12px;
+  max-width: 320px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ------------------------------------------------------------------ */
+/* Edit-mode body styles (outside shadow DOM)                          */
+/* ------------------------------------------------------------------ */
+
+body.cbf-inline-editing {
+  cursor: text;
+}
+
+.cbf-host {
+  position: relative;
+  display: block;
+  transition: outline 0.15s ease;
+}
+
+.cbf-host--editing {
+  outline: 2px dashed rgba(255, 138, 61, 0.6);
+  outline-offset: -2px;
+}
+
+.cbf-host--dirty {
+  outline-color: #28a745;
+}
+
+.cbf-host--focused {
+  outline-color: #0071eb;
+}
+
+/* Badge that appears in the top-right corner of a dirty block while editing. */
+.cbf-host--editing::before {
+  content: attr(data-cbf-field-name) ' #' attr(data-cbf-delta);
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 1;
+  background: rgba(15, 17, 32, 0.85);
+  color: #fff;
+  font: 11px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  padding: 3px 8px;
+  border-radius: 0 0 0 6px;
+  pointer-events: none;
+}
+
+.cbf-host--dirty::before {
+  background: rgba(40, 167, 69, 0.92);
+}
+
+/* ------------------------------------------------------------------ */
+/* Editable affordances INSIDE the shadow DOM.                          */
+/* These rules live outside the shadow root and use the :host-context() */
+/* pseudo-class to apply only when the page is in inline-editing mode.  */
+/* ------------------------------------------------------------------ */
+
+.cbf-host--editing > * {
+  /* The shadow root itself is invisible to CSS, but children are. */
+}
+
+/* The actual editable styles are injected into each shadow root at runtime
+   by the inline editor — see enableEditing() in inline-editor.js. */
+
+/* But we can style the .cbf-editable-image and .cbf-link-handle here only
+   if we use ::part(), which requires the elements to have part attributes.
+   For simplicity, the JS injects a <style> tag into each shadow root with
+   the rules below. */
+
+/* The styles below apply to the toolbar and badge (host document) only. */
