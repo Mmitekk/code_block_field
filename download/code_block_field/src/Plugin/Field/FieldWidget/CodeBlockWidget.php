@@ -256,34 +256,4 @@ class CodeBlockWidget extends WidgetBase {
     return $values;
   }
 
-  /**
-   * {@inheritdoc}
-   *
-   * Adds file-usage records for every asset referenced by the field. The
-   * actual reconciliation of orphaned references is handled by the inline
-   * save controller for inline edits, and by the entity delete hook for
-   * entity removal.
-   */
-  public function extractFormValues(FieldItemListInterface $items, array $form, FormStateInterface $form_state): array {
-    $values = parent::extractFormValues($items, $form, $form_state);
-
-    $host = $items->getEntity();
-    foreach ($items as $delta => $item) {
-      $assets = is_array($item->assets) ? $item->assets : [];
-      foreach ($assets as $key => $asset) {
-        $fid = $asset['fid'] ?? 0;
-        if (!$fid) {
-          continue;
-        }
-        $file = \Drupal::entityTypeManager()->getStorage('file')->load($fid);
-        if (!$file) {
-          continue;
-        }
-        \Drupal::service('file.usage')->add($file, 'code_block_field', $host->getEntityTypeId(), (int) ($host->id() ?: 0));
-      }
-    }
-
-    return $values;
-  }
-
 }
