@@ -99,10 +99,13 @@ class CodeBlockFormatter extends FormatterBase {
     foreach ($items as $delta => $item) {
       $assets = is_array($item->assets) ? $item->assets : [];
       // Resolve managed file URLs and inject them into the HTML.
+      // HTML is NOT re-filtered on render — filtering happens once, at
+      // save time (hook_entity_presave + InlineEditController::save).
+      // Re-filtering on render caused SVG attributes like `viewBox` to be
+      // stripped because DOMDocument (used internally by filter_html)
+      // normalises attribute names to lowercase, after which the
+      // case-sensitive whitelist match in filter_html fails.
       $html = $this->processAssets((string) $item->html, $assets, $settings['image_style'] ?? '');
-
-      // Sanitise HTML using the configured allowed-html list.
-      $html = $this->filterHtml($html);
 
       // Unique, stable ID for this block instance on the page.
       $instance_id = Html::getUniqueId(sprintf(
@@ -168,6 +171,13 @@ class CodeBlockFormatter extends FormatterBase {
    *
    * Also fills empty src attributes, normalises missing alt text and
    * optionally swaps in an image-style derivative.
+   *
+   * IMPORTANT: this method uses a regex-based approach instead of
+   * DOMDocument. DOMDocument normalises attribute names to lowercase
+   * (e.g. `viewBox` → `viewbox`), which breaks SVG icons and is
+   * case-sensitively checked against the allowed_html whitelist later.
+   * Regex replacement leaves the rest of the HTML (including SVG
+   * attributes) completely untouched.
    */
   protected function processAssets(string $html, array $assets, string $image_style): string {
     if (empty($assets) || $html === '') {
@@ -177,24 +187,14 @@ class CodeBlockFormatter extends FormatterBase {
     $file_url = \Drupal::service('file_url_generator');
     $image_style_storage = \Drupal::entityTypeManager()->getStorage('image_style');
 
-    // Use DOMDocument for robust replacement.
-    $dom = new \DOMDocument();
-    libxml_use_internal_errors(TRUE);
-    // Wrap in a utf-8 meta so DOMDocument parses the encoding correctly.
-    $dom->loadHTML('<?xml encoding="UTF-8"?><div>' . $html . '</div>', LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
-    libxml_clear_errors();
-
-    $imgs = $dom->getElementsByTagName('img');
-    foreach ($imgs as $img) {
-      $key = $img->getAttribute('data-cbf-asset');
-      if ($key === '' || !isset($assets[$key])) {
-        continue;
-      }
-      $fid = $assets[$key]['fid'] ?? 0;
+    // Pre-resolve asset URLs and alt-text defaults so we don't re-load
+    // the file inside the regex callback.
+    $resolved = [];
+    foreach ($assets as $key => $asset) {
+      $fid = $asset['fid'] ?? 0;
       if (!$fid) {
         continue;
       }
-      /** @var \Drupal\file\FileInterface|null $file */
       $file = $file_storage->load($fid);
       if (!$file) {
         continue;
@@ -206,21 +206,50 @@ class CodeBlockFormatter extends FormatterBase {
       else {
         $url = $file_url->generateAbsoluteString($file->getFileUri());
       }
-      $img->setAttribute('src', $url);
-      if (!empty($assets[$key]['alt']) && !$img->getAttribute('alt')) {
-        $img->setAttribute('alt', $assets[$key]['alt']);
-      }
+      $resolved[$key] = [
+        'url' => $url,
+        'alt' => $asset['alt'] ?? '',
+      ];
     }
 
-    // Extract the inner HTML of the wrapper <div>.
-    $wrapper = $dom->getElementsByTagName('div')->item(0);
-    $inner = '';
-    if ($wrapper) {
-      foreach ($wrapper->childNodes as $child) {
-        $inner .= $dom->saveHTML($child);
-      }
+    if (empty($resolved)) {
+      return $html;
     }
-    return $inner;
+
+    // Regex-based replacement of <img ... data-cbf-asset="KEY" ...>.
+    // We match the entire <img> tag and then patch its `src` attribute
+    // (and add `alt` if missing). Everything else in the HTML — including
+    // <svg> tags with their case-sensitive attributes like `viewBox` —
+    // is left completely untouched.
+    return preg_replace_callback(
+      '/<img\b([^>]*?\bdata-cbf-asset="([^"]+)")[^>]*>/i',
+      function ($m) use ($resolved) {
+        $full_tag = $m[0];
+        $key = $m[2];
+        if (!isset($resolved[$key])) {
+          return $full_tag;
+        }
+        $url = $resolved[$key]['url'];
+        $alt_default = $resolved[$key]['alt'];
+
+        // Replace existing src="..." or insert a new src attribute.
+        if (preg_match('/\bsrc="([^"]*)"/i', $full_tag)) {
+          $full_tag = preg_replace('/\bsrc="[^"]*"/i', 'src="' . htmlspecialchars($url, ENT_QUOTES) . '"', $full_tag, 1);
+        }
+        else {
+          // Insert src right after the <img.
+          $full_tag = preg_replace('/^<img\b/i', '<img src="' . htmlspecialchars($url, ENT_QUOTES) . '"', $full_tag, 1);
+        }
+
+        // If alt is missing and we have a default, add it.
+        if ($alt_default && !preg_match('/\balt="[^"]*"/i', $full_tag)) {
+          $full_tag = preg_replace('/^<img\b/i', '<img alt="' . htmlspecialchars($alt_default, ENT_QUOTES) . '"', $full_tag, 1);
+        }
+
+        return $full_tag;
+      },
+      $html
+    );
   }
 
   /**

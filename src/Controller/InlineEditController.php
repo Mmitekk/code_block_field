@@ -399,6 +399,10 @@ class InlineEditController extends ControllerBase {
 
   /**
    * Filters an HTML string using the global allowed_html setting.
+   *
+   * Delegates to the centralised code_block_field_filter_html() helper so
+   * that the filtering logic is identical on both save paths (entity form
+   * and inline editor).
    */
   protected function filterHtml(string $html): string {
     $config = $this->config('code_block_field.settings');
@@ -409,14 +413,7 @@ class InlineEditController extends ControllerBase {
     if (!$allowed) {
       return $html;
     }
-    $filter = \Drupal::service('plugin.manager.filter')->createInstance('filter_html', [
-      'settings' => [
-        'allowed_html' => $allowed,
-        'filter_html_help' => FALSE,
-        'filter_html_nofollow' => FALSE,
-      ],
-    ]);
-    return (string) $filter->process($html, 'und');
+    return code_block_field_filter_html($html, $allowed);
   }
 
   /**

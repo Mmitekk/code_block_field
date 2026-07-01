@@ -5,6 +5,48 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.3] — 2026-07-01
+
+### Fixed
+
+- **SVG attributes were still being stripped on render even after the
+  1.2.2 fix.** Root cause: the formatter was re-filtering HTML on every
+  render through the core `filter_html` plugin, which internally uses
+  `DOMDocument`. `DOMDocument` normalises attribute names to lowercase
+  (`viewBox` → `viewbox`, `strokeWidth` → `strokewidth`, etc.) before
+  the filter checks them against the case-sensitive `allowed_html`
+  whitelist — so `viewBox` was being silently dropped even though it was
+  listed in `allowed_html`. The fix has three parts:
+
+  1. **Removed `filterHtml()` call from the formatter.** HTML is no
+     longer re-filtered on render. Filtering happens once, at save
+     time — the same content that is in the database is what gets sent
+     to the browser. This also fixes a double-filtering issue where
+     inline-saved HTML was filtered twice (once in
+     `InlineEditController::save`, once in the formatter on the next
+     page load).
+  2. **Rewrote `processAssets()` to use a regex instead of
+     `DOMDocument`.** The old implementation round-tripped the entire
+     HTML through `DOMDocument` to find `<img data-cbf-asset="...">`
+     tags, which normalised the case of every attribute in the HTML
+     (including SVG attributes inside the same block). The new
+     implementation uses `preg_replace_callback` to patch only the
+     `src` (and optionally `alt`) attributes of `<img>` tags with a
+     `data-cbf-asset` attribute, leaving the rest of the HTML
+     completely untouched.
+  3. **Added `filterHtml` call to `hook_entity_presave()`.** Previously,
+     HTML saved through the entity form was never filtered (only
+     inline-saved HTML was filtered in `InlineEditController::save`).
+     Now both save paths filter through the same centralised
+     `code_block_field_filter_html()` helper function, so the
+     behaviour is consistent and the formatter can safely skip
+     filtering.
+
+- Added `code_block_field_filter_html()` helper function in
+  `code_block_field.module` to centralise the filter_html invocation
+  logic. Used by both `hook_entity_presave()` and
+  `InlineEditController::filterHtml()`.
+
 ## [1.2.2] — 2026-07-01
 
 ### Fixed
@@ -234,6 +276,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with installation, configuration, usage, structure, and customisation
   instructions.
 
+[1.2.3]: https://github.com/Mmitekk/code_block_field/releases/tag/1.2.3
 [1.2.2]: https://github.com/Mmitekk/code_block_field/releases/tag/1.2.2
 [1.2.1]: https://github.com/Mmitekk/code_block_field/releases/tag/1.2.1
 [1.2.0]: https://github.com/Mmitekk/code_block_field/releases/tag/1.2.0
