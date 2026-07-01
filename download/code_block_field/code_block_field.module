@@ -97,6 +97,8 @@ function code_block_field_entity_presave(\Drupal\Core\Entity\EntityInterface $en
   }
   $config = \Drupal::config('code_block_field.settings');
   $auto_assign = (bool) $config->get('auto_assign_asset_keys');
+  $filter_html = (bool) $config->get('filter_html');
+  $allowed_html = $config->get('allowed_html');
   foreach ($entity->getFields() as $field_name => $fieldItemList) {
     $definition = $fieldItemList->getFieldDefinition();
     if ($definition->getType() !== 'code_block') {
@@ -116,6 +118,17 @@ function code_block_field_entity_presave(\Drupal\Core\Entity\EntityInterface $en
         }
         if ($assets !== (is_array($item->assets) ? $item->assets : [])) {
           $item->assets = $assets;
+        }
+      }
+
+      // Filter HTML on save (when filter_html is enabled). This runs once,
+      // at save time — the formatter no longer re-filters on render to
+      // avoid DOMDocument normalising SVG attribute names (viewBox →
+      // viewbox) and breaking the case-sensitive whitelist match.
+      if ($filter_html && $allowed_html && !empty($item->html)) {
+        $filtered = code_block_field_filter_html((string) $item->html, $allowed_html);
+        if ($filtered !== $item->html) {
+          $item->html = $filtered;
         }
       }
 
@@ -164,4 +177,34 @@ function code_block_field_entity_delete(\Drupal\Core\Entity\EntityInterface $ent
       }
     }
   }
+}
+
+/**
+ * Filters an HTML string using the core filter_html plugin.
+ *
+ * Centralised helper used by both hook_entity_presave() (for entity-form
+ * saves) and InlineEditController::save() (for inline saves) so that the
+ * filtering logic is identical on both code paths.
+ *
+ * @param string $html
+ *   The HTML to filter.
+ * @param string $allowed_html
+ *   The allowed-html list (same format as the Filter module's filter_html).
+ *
+ * @return string
+ *   The filtered HTML.
+ */
+function code_block_field_filter_html(string $html, string $allowed_html): string {
+  if (!$allowed_html) {
+    return $html;
+  }
+  /** @var \Drupal\filter\Plugin\FilterInterface $filter */
+  $filter = \Drupal::service('plugin.manager.filter')->createInstance('filter_html', [
+    'settings' => [
+      'allowed_html' => $allowed_html,
+      'filter_html_help' => FALSE,
+      'filter_html_nofollow' => FALSE,
+    ],
+  ]);
+  return (string) $filter->process($html, 'und');
 }
