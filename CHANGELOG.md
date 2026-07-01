@@ -5,6 +5,55 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] — 2026-07-01
+
+### Added
+
+- **WYSIWYG floating format toolbar.** When the user selects text inside an
+  editable element, a floating toolbar appears above the selection (Medium /
+  Notion style) with the following buttons:
+  - **B / I / U / S** — bold, italic, underline, strikethrough
+  - **H2 / H3 / H4 / ¶** — convert the current block to a heading or paragraph
+  - **⬅ ⬌ ➡ ☰** — left / centre / right / justify alignment
+  - **• / 1.** — bulleted and numbered lists
+  - **A** with a colour picker — text colour
+  - **🔗** — insert/edit a link (uses the existing modal link picker)
+  - **⌫** — clear formatting
+  The toolbar highlights active formats (e.g. B is highlighted when the
+  selection is bold). It hides automatically when the selection collapses.
+- **Image editing improvements:**
+  - **Resize handles.** Clicking an image in edit mode shows two corner
+    handles (bottom-left and bottom-right) for resizing by drag. The aspect
+    ratio is preserved. The new size is saved as inline `style="width:…"`.
+  - **Context menu.** Right-clicking an image opens a menu with: Replace
+    image, Upload from URL…, Edit alt text, Reset size, Delete image.
+  - **Alt editing on the spot.** Edit alt text in a small popup next to
+    the image (no modal).
+  - **Insert new image.** A floating "+" button in the top-right of every
+    block adds a new `<img data-cbf-asset="…">` and immediately opens the
+    file picker.
+  - **Upload from URL.** Replace an image with an external URL through a
+    prompt. The `data-cbf-asset` attribute is removed so the file-usage
+    tracking stays consistent.
+- **Revision support (optional).** A new "Create a new entity revision on
+  every inline save" checkbox in the module settings, with a configurable
+  revision log message (`%date` is replaced with the current date/time).
+  When enabled, every inline save creates a new revision of the host
+  entity (node, paragraph, …). The response includes `revision_id` when a
+  revision was created. Only applies to entity types that implement
+  `RevisionableInterface`.
+
+### Changed
+
+- **Default allowed_html now permits `style` on common block elements**
+  (`p`, `h1`–`h6`, `ul`, `ol`, `li`, `table`, `tr`, `td`, `th`, `div`,
+  `span`, `img`, `figure`, `section`, …) so that inline-resized images and
+  alignment styles persist through the HTML filter on save. Existing sites
+  that already installed the module need to update the allowed_html setting
+  manually on the module settings page, or run
+  `drush config-delete code_block_field.settings allowed_html && drush cr`
+  to pick up the new default.
+
 ## [1.0.3] — 2026-07-01
 
 ### Added
@@ -94,6 +143,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with installation, configuration, usage, structure, and customisation
   instructions.
 
+[1.1.0]: https://github.com/Mmitekk/code_block_field/releases/tag/1.1.0
 [1.0.3]: https://github.com/Mmitekk/code_block_field/releases/tag/1.0.3
 [1.0.2]: https://github.com/Mmitekk/code_block_field/releases/tag/1.0.2
 [1.0.1]: https://github.com/Mmitekk/code_block_field/releases/tag/1.0.1

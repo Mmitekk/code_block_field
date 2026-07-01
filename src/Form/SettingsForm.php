@@ -126,6 +126,25 @@ class SettingsForm extends ConfigFormBase {
       '#default_value' => (bool) $config->get('expose_edit_button'),
     ];
 
+    $form['editor']['create_revisions'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t('Create a new entity revision on every inline save'),
+      '#description' => $this->t('When enabled, each inline save (text/image/link edit) creates a new revision of the host entity (node, paragraph, etc.). Improves audit trail but produces more revision history entries. Only applies to entity types that support revisions.'),
+      '#default_value' => (bool) $config->get('create_revisions'),
+    ];
+
+    $form['editor']['revision_log_message'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Default revision log message'),
+      '#description' => $this->t('Used as the revision log when an inline save creates a revision. <code>%date</code> is replaced with the current date/time.'),
+      '#default_value' => $config->get('revision_log_message') ?: 'Inline edit (%date)',
+      '#states' => [
+        'visible' => [
+          ':input[name="create_revisions"]' => ['checked' => TRUE],
+        ],
+      ],
+    ];
+
     // ===== Editor colours =====
     $form['colors'] = [
       '#type' => 'fieldset',
@@ -183,6 +202,8 @@ class SettingsForm extends ConfigFormBase {
       ->set('default_image_style', $form_state->getValue('default_image_style'))
       ->set('shadow_mode', $form_state->getValue('shadow_mode'))
       ->set('expose_edit_button', (bool) $form_state->getValue('expose_edit_button'))
+      ->set('create_revisions', (bool) $form_state->getValue('create_revisions'))
+      ->set('revision_log_message', $form_state->getValue('revision_log_message'))
       ->set('color_toolbar_bg', $form_state->getValue('color_toolbar_bg'))
       ->set('color_toolbar_accent', $form_state->getValue('color_toolbar_accent'))
       ->set('color_edit_outline', $form_state->getValue('color_edit_outline'))

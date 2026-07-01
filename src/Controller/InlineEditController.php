@@ -219,13 +219,46 @@ class InlineEditController extends ControllerBase {
     // Sync file usage.
     $this->syncFileUsage($reconciled, $entity, (array) ($field[$delta]->assets ?? []));
 
+    // Optionally create a new revision (configurable in the module settings).
+    // Only applies to entity types that actually support revisions.
+    $config = $this->config('code_block_field.settings');
+    $create_revision = (bool) $config->get('create_revisions');
+    if ($create_revision && $entity instanceof \Drupal\Core\Entity\RevisionableInterface) {
+      $log_template = $config->get('revision_log_message') ?: 'Inline edit (%date)';
+      $log = str_replace('%date', date('Y-m-d H:i:s'), $log_template);
+      $entity_type = $entity->getEntityType();
+      if ($entity_type->isRevisionable()) {
+        // Set the revision log field if the entity has one.
+        $revision_log_field = $entity_type->getRevisionMetadataKey('revision_log') ?? 'revision_log';
+        if ($entity->hasField($revision_log_field)) {
+          $entity->set($revision_log_field, $log);
+        }
+        elseif ($entity->hasField('revision_log')) {
+          $entity->set('revision_log', $log);
+        }
+        // Mark this as a new revision (default = TRUE for revisionable
+        // entities, but enforce it explicitly so revisions stay enabled
+        // even if the host entity has them turned off by default).
+        if (method_exists($entity, 'setNewRevision')) {
+          $entity->setNewRevision(TRUE);
+        }
+        // Use the current user as the revision author.
+        if (method_exists($entity, 'setRevisionUserId')) {
+          $entity->setRevisionUserId($this->currentUser()->id());
+        }
+        elseif ($entity->hasField('revision_uid')) {
+          $entity->set('revision_uid', $this->currentUser()->id());
+        }
+      }
+    }
+
     try {
       $entity->save();
     } catch (\Throwable $e) {
       return new JsonResponse(['error' => 'Save failed: ' . $e->getMessage()], 500);
     }
 
-    $response = new CacheableJsonResponse([
+    $response_data = [
       'success' => TRUE,
       'entity_type' => $entity->getEntityTypeId(),
       'entity_id' => $entity->id(),
@@ -233,7 +266,11 @@ class InlineEditController extends ControllerBase {
       'delta' => $delta,
       'html' => $filtered_html,
       'assets' => $reconciled,
-    ]);
+    ];
+    if (isset($create_revision) && $create_revision && $entity instanceof \Drupal\Core\Entity\RevisionableInterface) {
+      $response_data['revision_id'] = method_exists($entity, 'getRevisionId') ? $entity->getRevisionId() : NULL;
+    }
+    $response = new CacheableJsonResponse($response_data);
     $response->addCacheableDependency($entity);
     return $response;
   }
