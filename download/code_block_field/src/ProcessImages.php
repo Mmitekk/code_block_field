@@ -20,6 +20,14 @@ use Drupal\file\FileInterface;
  *     existing images immediately manageable through the inline editor
  *     without manual data-cbf-asset markup.
  *
+ * IMPORTANT: this class uses a regex-based approach instead of DOMDocument.
+ * DOMDocument normalises attribute names to lowercase (e.g. `viewBox` →
+ * `viewbox`) and self-closes empty tags (e.g. `<polyline></polyline>` →
+ * `<polyline />`), which breaks SVG icons that are stored in the same
+ * HTML payload as <img> tags. The regex approach only patches the <img>
+ * tags that need a data-cbf-asset attribute and leaves the rest of the
+ * HTML completely untouched.
+ *
  * The class is intentionally side-effect free apart from the assets map
  * (passed by reference) — it does not save anything to the database, does
  * not register file.usage (that is done by the caller via the entity hooks),
@@ -45,75 +53,86 @@ final class ProcessImages {
       return $html;
     }
 
-    // Use a per-request counter so that keys within the same HTML save
-    // operation are stable and human-readable.
+    // Per-request counter for unique key generation.
     static $counter = 0;
 
-    $dom = new \DOMDocument();
-    libxml_use_internal_errors(TRUE);
-    // Wrap in a utf-8 meta so DOMDocument parses the encoding correctly.
-    $dom->loadHTML('<?xml encoding="UTF-8"?><div>' . $html . '</div>', LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
-    libxml_clear_errors();
+    // Regex-based scan of every <img ...> tag. We match the whole tag and
+    // patch only the tags that do NOT have a data-cbf-asset attribute yet.
+    // Everything else in the HTML (including <svg>, <polyline>, etc.) is
+    // left completely untouched.
+    return preg_replace_callback(
+      '/<img\b([^>]*?)\s*\/?>/i',
+      function ($m) use (&$assets, &$counter) {
+        $full_tag = $m[0];
+        $attrs_str = $m[1];
 
-    $modified = FALSE;
-    $imgs = $dom->getElementsByTagName('img');
-    // We can't use foreach directly because we modify attributes; collect
-    // items into a plain array first.
-    $img_list = [];
-    foreach ($imgs as $img) {
-      $img_list[] = $img;
-    }
-    foreach ($img_list as $img) {
-      $key = $img->getAttribute('data-cbf-asset');
-      if ($key !== '') {
-        // Already has a key — make sure it's in the assets map.
-        if (!isset($assets[$key])) {
-          $assets[$key] = [
-            'fid' => 0,
-            'alt' => $img->getAttribute('alt') ?: '',
-            'src' => $img->getAttribute('src') ?: '',
-          ];
+        // Check if data-cbf-asset is already present (case-insensitive).
+        if (preg_match('/\bdata-cbf-asset\s*=/i', $attrs_str)) {
+          // Extract the existing key and make sure it's in the assets map.
+          if (preg_match('/\bdata-cbf-asset\s*=\s*"([^"]*)"/i', $attrs_str, $km)) {
+            $key = $km[1];
+            if (!isset($assets[$key])) {
+              $assets[$key] = [
+                'fid' => 0,
+                'alt' => self::extractAttr($attrs_str, 'alt'),
+                'src' => self::extractAttr($attrs_str, 'src'),
+              ];
+            }
+          }
+          return $full_tag;
         }
-        continue;
-      }
 
-      // Generate a unique key.
-      $counter++;
-      $key = 'auto-asset-' . dechex(time() & 0xFFFFFF) . '-' . $counter;
-      $img->setAttribute('data-cbf-asset', $key);
-      $modified = TRUE;
+        // Generate a unique key.
+        $counter++;
+        $key = 'auto-asset-' . dechex(time() & 0xFFFFFF) . '-' . $counter;
 
-      $src = $img->getAttribute('src');
-      $alt = $img->getAttribute('alt') ?: '';
-      $fid = 0;
+        // Extract src and alt from the existing attributes.
+        $src = self::extractAttr($attrs_str, 'src');
+        $alt = self::extractAttr($attrs_str, 'alt');
+        $fid = 0;
+        if ($src) {
+          $fid = self::resolveFileIdFromSrc($src);
+        }
+        $assets[$key] = [
+          'fid' => $fid,
+          'alt' => $alt,
+          'src' => $src,
+        ];
 
-      if ($src) {
-        $fid = self::resolveFileIdFromSrc($src);
-      }
+        // Add the data-cbf-asset attribute right after <img.
+        return preg_replace(
+          '/^<img\b/i',
+          '<img data-cbf-asset="' . htmlspecialchars($key, ENT_QUOTES) . '"',
+          $full_tag,
+          1
+        );
+      },
+      $html
+    );
+  }
 
-      $assets[$key] = [
-        'fid' => $fid,
-        'alt' => $alt,
-        'src' => $src,
-      ];
+  /**
+   * Extracts an attribute value from an attribute string.
+   *
+   * @param string $attrs_str
+   *   The attribute portion of an HTML tag (everything between <img and >).
+   * @param string $name
+   *   The attribute name to extract.
+   *
+   * @return string
+   *   The attribute value, or empty string if not present.
+   */
+  protected static function extractAttr(string $attrs_str, string $name): string {
+    if (preg_match('/\b' . preg_quote($name, '/') . '\s*=\s*"([^"]*)"/i', $attrs_str, $m)) {
+      return $m[1];
     }
-
-    if (!$modified) {
-      // Nothing to do — return the original HTML untouched so we don't
-      // introduce encoding artefacts from DOMDocument round-tripping.
-      return $html;
+    if (preg_match('/\b' . preg_quote($name, '/') . "\s*=\s*'([^']*)'/i", $attrs_str, $m)) {
+      return $m[1];
     }
-
-    // Extract the inner HTML of the wrapper <div>.
-    $wrapper = $dom->getElementsByTagName('div')->item(0);
-    if (!$wrapper) {
-      return $html;
+    if (preg_match('/\b' . preg_quote($name, '/') . '\s*=\s*([^\s"\'<>]+)/i', $attrs_str, $m)) {
+      return $m[1];
     }
-    $inner = '';
-    foreach ($wrapper->childNodes as $child) {
-      $inner .= $dom->saveHTML($child);
-    }
-    return $inner;
+    return '';
   }
 
   /**
