@@ -46,17 +46,17 @@ class CodeBlockWidget extends WidgetBase {
 
     $form['rows'] = [
       '#type' => 'number',
-      '#title' => $this->t('Textarea rows'),
+      '#title' => $this->t('Количество строк'),
       '#default_value' => $this->getSetting('rows'),
       '#min' => 4,
       '#max' => 60,
     ];
     $form['theme'] = [
       '#type' => 'select',
-      '#title' => $this->t('CodeMirror theme'),
+      '#title' => $this->t('Тема CodeMirror'),
       '#options' => [
         'material-darker' => $this->t('Material Darker'),
-        'default' => $this->t('Default (light)'),
+        'default' => $this->t('По умолчанию (светлая)'),
         'dracula' => $this->t('Dracula'),
         'nord' => $this->t('Nord'),
         'monokai' => $this->t('Monokai'),
@@ -65,19 +65,19 @@ class CodeBlockWidget extends WidgetBase {
     ];
     $form['tab_size'] = [
       '#type' => 'number',
-      '#title' => $this->t('Tab size'),
+      '#title' => $this->t('Размер табуляции'),
       '#default_value' => $this->getSetting('tab_size'),
       '#min' => 1,
       '#max' => 8,
     ];
     $form['line_numbers'] = [
       '#type' => 'checkbox',
-      '#title' => $this->t('Show line numbers'),
+      '#title' => $this->t('Показывать номера строк'),
       '#default_value' => $this->getSetting('line_numbers'),
     ];
     $form['auto_close_tags'] = [
       '#type' => 'checkbox',
-      '#title' => $this->t('Auto-close HTML tags'),
+      '#title' => $this->t('Автозакрытие HTML-тегов'),
       '#default_value' => $this->getSetting('auto_close_tags'),
     ];
     return $form;
@@ -88,7 +88,7 @@ class CodeBlockWidget extends WidgetBase {
    */
   public function settingsSummary() {
     return [
-      $this->t('Rows: @rows, Theme: @theme', [
+      $this->t('Строк: @rows, Тема: @theme', [
         '@rows' => $this->getSetting('rows'),
         '@theme' => $this->getSetting('theme'),
       ]),
@@ -104,7 +104,7 @@ class CodeBlockWidget extends WidgetBase {
     $element += [
       '#type' => 'details',
       '#open' => TRUE,
-      '#title' => $this->t('Code Block #@delta', ['@delta' => $delta + 1]),
+      '#title' => $this->t('Блок кода #@delta', ['@delta' => $delta + 1]),
       '#attributes' => [
         'class' => ['code-block-field-widget'],
         'data-cbf-widget' => TRUE,
@@ -130,7 +130,7 @@ class CodeBlockWidget extends WidgetBase {
       '#title' => $this->t('HTML'),
       '#default_value' => $item->html ?? '',
       '#rows' => $this->getSetting('rows'),
-      '#description' => $this->t('Use <code>&lt;img data-cbf-asset="KEY" src="…" alt="…"&gt;</code> to mark images as managed assets. The editor will keep their file references in sync.'),
+      '#description' => $this->t('Используйте <code>&lt;img data-cbf-asset="KEY" src="…" alt="…"&gt;</code>, чтобы пометить картинки как управляемые ассеты. Редактор будет синхронизировать ссылки на файлы автоматически. Если в настройках модуля включено авто-присвоение — атрибут будет добавлен всем картинкам без него при сохранении.'),
       '#attributes' => [
         'class' => ['code-block-editor', 'code-block-editor-html'],
         'data-cbf-mode' => 'htmlmixed',
@@ -143,7 +143,7 @@ class CodeBlockWidget extends WidgetBase {
       '#title' => $this->t('CSS'),
       '#default_value' => $item->css ?? '',
       '#rows' => $this->getSetting('rows'),
-      '#description' => $this->t('CSS is scoped to the block’s Shadow DOM. Use <code>:host</code> for the host element.'),
+      '#description' => $this->t('CSS изолирован в Shadow DOM блока. Используйте <code>:host</code> для обращения к хост-элементу.'),
       '#attributes' => [
         'class' => ['code-block-editor', 'code-block-editor-css'],
         'data-cbf-mode' => 'css',
@@ -156,7 +156,7 @@ class CodeBlockWidget extends WidgetBase {
       '#title' => $this->t('JavaScript'),
       '#default_value' => $item->js ?? '',
       '#rows' => $this->getSetting('rows'),
-      '#description' => $this->t('Executes after the Shadow DOM is mounted. The variable <code>host</code> refers to the host element, <code>shadowRoot</code> to its shadow root.'),
+      '#description' => $this->t('Выполняется после монтирования Shadow DOM. Переменная <code>host</code> указывает на хост-элемент, <code>shadowRoot</code> — на его shadow root.'),
       '#attributes' => [
         'class' => ['code-block-editor', 'code-block-editor-js'],
         'data-cbf-mode' => 'javascript',
@@ -188,24 +188,24 @@ class CodeBlockWidget extends WidgetBase {
   protected function buildAssetBrowser(FieldItemListInterface $items, int $delta, array $assets): array {
     $build = [
       '#type' => 'details',
-      '#title' => $this->t('Managed assets (@count)', ['@count' => count($assets)]),
+      '#title' => $this->t('Управляемые ассеты (@count)', ['@count' => count($assets)]),
       '#group' => 'code',
       '#attributes' => ['class' => ['code-block-asset-browser']],
     ];
 
     if (empty($assets)) {
       $build['empty'] = [
-        '#markup' => '<p class="description">' . $this->t('No managed assets yet. Use the inline editor on the page or add <code>&lt;img data-cbf-asset="KEY"&gt;</code> in the HTML and upload the file via the inline picker.')->render() . '</p>',
+        '#markup' => '<p class="description">' . $this->t('Пока нет управляемых ассетов. Используйте инлайн-редактор на странице или добавьте <code>&lt;img data-cbf-asset="KEY"&gt;</code> в HTML и загрузите файл через инлайн-пикер. Если в настройках модуля включено авто-присвоение — все картинки получат ключ автоматически при сохранении.')->render() . '</p>',
       ];
       return $build;
     }
 
     $header = [
-      $this->t('Key'),
-      $this->t('Preview'),
-      $this->t('File'),
+      $this->t('Ключ'),
+      $this->t('Превью'),
+      $this->t('Файл'),
       $this->t('Alt'),
-      $this->t('Operations'),
+      $this->t('Действия'),
     ];
     $rows = [];
     foreach ($assets as $key => $asset) {
@@ -222,7 +222,7 @@ class CodeBlockWidget extends WidgetBase {
               '#context' => ['url' => \Drupal::service('file_url_generator')->generateAbsoluteString($file->getFileUri())],
             ],
           ] : '-',
-          $file ? $file->getFilename() : $this->t('(missing file)'),
+          $file ? $file->getFilename() : $this->t('(файл отсутствует)'),
           $asset['alt'] ?? '',
           '',
         ],
@@ -232,7 +232,7 @@ class CodeBlockWidget extends WidgetBase {
       '#type' => 'table',
       '#header' => $header,
       '#rows' => $rows,
-      '#empty' => $this->t('No assets.'),
+      '#empty' => $this->t('Нет ассетов.'),
     ];
     return $build;
   }

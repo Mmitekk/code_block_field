@@ -202,6 +202,22 @@ class InlineEditController extends ControllerBase {
     $html = (string) ($payload['html'] ?? $field[$delta]->html);
     $filtered_html = $this->filterHtml($html);
 
+    // Auto-assign data-cbf-asset to any <img> that doesn't have one.
+    // This runs before reconcileAssets so newly-tagged images get their
+    // assets map entries (with resolved fid for managed files).
+    $config = $this->config('code_block_field.settings');
+    if ((bool) $config->get('auto_assign_asset_keys') && $filtered_html !== '') {
+      $assets_for_processing = is_array($payload['assets'] ?? NULL) ? $payload['assets'] : [];
+      $filtered_html = \Drupal\code_block_field\ProcessImages::process(
+        $filtered_html,
+        $assets_for_processing,
+        $entity
+      );
+      // Merge any new auto-assets back into the payload so reconcileAssets
+      // picks them up.
+      $payload['assets'] = $assets_for_processing;
+    }
+
     $field[$delta]->html = $filtered_html;
     if (array_key_exists('css', $payload)) {
       $field[$delta]->css = (string) $payload['css'];
@@ -221,7 +237,7 @@ class InlineEditController extends ControllerBase {
 
     // Optionally create a new revision (configurable in the module settings).
     // Only applies to entity types that actually support revisions.
-    $config = $this->config('code_block_field.settings');
+    // Note: $config already loaded above for auto_assign_asset_keys.
     $create_revision = (bool) $config->get('create_revisions');
     if ($create_revision && $entity instanceof \Drupal\Core\Entity\RevisionableInterface) {
       $log_template = $config->get('revision_log_message') ?: 'Inline edit (%date)';
@@ -363,7 +379,7 @@ class InlineEditController extends ControllerBase {
     );
     $build['form'] = $form;
     $build['#attached']['library'][] = 'core/drupal.dialog.ajax';
-    $build['#title'] = $this->t('Replace image');
+    $build['#title'] = $this->t('Заменить изображение');
     return $build;
   }
 
@@ -377,7 +393,7 @@ class InlineEditController extends ControllerBase {
     );
     $build['form'] = $form;
     $build['#attached']['library'][] = 'core/drupal.dialog.ajax';
-    $build['#title'] = $this->t('Edit link');
+    $build['#title'] = $this->t('Редактировать ссылку');
     return $build;
   }
 

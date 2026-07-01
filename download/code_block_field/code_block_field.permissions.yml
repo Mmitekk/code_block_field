@@ -1,14 +1,14 @@
 'use code block field inline editor':
-  title: 'Use inline editor for Code Block fields'
-  description: 'Allows editing HTML/CSS/JS content of Code Block fields directly on the page without opening the entity edit form. Includes uploading images and editing links. The user must also have "update" access on the host entity.'
+  title: 'Использовать инлайн-редактор для полей Code Block'
+  description: 'Позволяет редактировать содержимое HTML/CSS/JS полей Code Block прямо на странице без открытия формы сущности. Включает загрузку изображений и редактирование ссылок. Пользователь также должен иметь право «update» на сущности.'
   restrict access: true
 
 'administer code block field':
-  title: 'Administer Code Block Field settings'
-  description: 'Configure global settings for Code Block Field module (filter settings, default editor, upload location, colours).'
+  title: 'Администрировать настройки Code Block Field'
+  description: 'Доступ к глобальным настройкам модуля (фильтр HTML, путь загрузки, цвета редактора и т.д.).'
   restrict access: true
 
 'edit code block html directly':
-  title: 'Edit raw HTML in Code Block fields'
-  description: 'When disabled, the user can only change text/images/links through the inline editor, but cannot modify the structure (HTML code) of the block through the entity edit form.'
+  title: 'Редактировать HTML-код в полях Code Block напрямую'
+  description: 'Если выключено — пользователь может менять только текст/изображения/ссылки через инлайн-редактор, но не может изменять структуру (HTML-код) блока через форму сущности.'
   restrict access: false

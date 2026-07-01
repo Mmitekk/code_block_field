@@ -46,29 +46,29 @@ class CodeBlockFormatter extends FormatterBase {
 
     $form['shadow_mode'] = [
       '#type' => 'select',
-      '#title' => $this->t('Shadow DOM mode'),
+      '#title' => $this->t('Режим Shadow DOM'),
       '#options' => [
         'open' => $this->t('Open'),
-        'closed' => $this->t('Closed (extra isolation)'),
+        'closed' => $this->t('Closed (дополнительная изоляция)'),
       ],
       '#default_value' => $this->getSetting('shadow_mode'),
     ];
     $form['enable_inline_editing'] = [
       '#type' => 'checkbox',
-      '#title' => $this->t('Enable inline editing on this display'),
+      '#title' => $this->t('Включить инлайн-редактирование в этом режиме отображения'),
       '#default_value' => $this->getSetting('enable_inline_editing'),
-      '#description' => $this->t('Even when checked, the user still needs the "use code block field inline editor" permission.'),
+      '#description' => $this->t('Даже если включено — пользователю всё равно нужно право «use code block field inline editor».'),
     ];
-    $image_styles = ['' => $this->t('- None (original image) -')];
+    $image_styles = ['' => $this->t('- Нет (оригинал) -')];
     foreach (\Drupal::entityTypeManager()->getStorage('image_style')->loadMultiple() as $style) {
       $image_styles[$style->id()] = $style->label();
     }
     $form['image_style'] = [
       '#type' => 'select',
-      '#title' => $this->t('Image style for managed assets'),
+      '#title' => $this->t('Стиль изображений для управляемых ассетов'),
       '#options' => $image_styles,
       '#default_value' => $this->getSetting('image_style'),
-      '#empty_option' => $this->t('- Original -'),
+      '#empty_option' => $this->t('- Оригинал -'),
     ];
     return $form;
   }
@@ -78,9 +78,9 @@ class CodeBlockFormatter extends FormatterBase {
    */
   public function settingsSummary() {
     return [
-      $this->t('Shadow: @mode, Inline: @inline', [
+      $this->t('Shadow: @mode, Инлайн: @inline', [
         '@mode' => $this->getSetting('shadow_mode'),
-        '@inline' => $this->getSetting('enable_inline_editing') ? $this->t('on') : $this->t('off'),
+        '@inline' => $this->getSetting('enable_inline_editing') ? $this->t('вкл') : $this->t('выкл'),
       ]),
     ];
   }

@@ -8,14 +8,16 @@ use Drupal\Core\Form\ConfigFormBase;
 use Drupal\Core\Form\FormStateInterface;
 
 /**
- * Global configuration form for the Code Block Field module.
+ * Форма глобальных настроек модуля Code Block Field.
  *
- * Provides settings for:
- *  - HTML filtering (allowed tags + on/off toggle)
- *  - File storage (upload location, max filesize, default image style)
- *  - Shadow DOM mode (open / closed)
- *  - Inline editor UX (floating toolbar visibility)
- *  - Editor colours (toolbar + editable-element visual chrome)
+ * Содержит настройки:
+ *  - HTML-фильтр (разрешённые теги + вкл/выкл)
+ *  - Хранилище файлов (путь загрузки, макс. размер, image style по умолчанию)
+ *  - Режим Shadow DOM (open / closed)
+ *  - UX инлайн-редактора (видимость плавающей кнопки)
+ *  - Создание ревизий при inline-сохранении
+ *  - Авто-присвоение data-cbf-asset картинкам
+ *  - Цвета редактора (toolbar + визуальные индикаторы)
  */
 class SettingsForm extends ConfigFormBase {
 
@@ -39,104 +41,104 @@ class SettingsForm extends ConfigFormBase {
   public function buildForm(array $form, FormStateInterface $form_state) {
     $config = $this->config('code_block_field.settings');
 
-    // ===== General / HTML filter =====
+    // ===== HTML-фильтр =====
     $form['filter'] = [
       '#type' => 'fieldset',
-      '#title' => $this->t('HTML filter'),
-      '#description' => $this->t('The submitted HTML is run through the core <em>filter_html</em> plugin on every save (both from the entity form and from the inline editor). The allowed-tags list controls which tags and attributes are kept.'),
+      '#title' => $this->t('HTML-фильтр'),
+      '#description' => $this->t('Сохраняемый HTML пропускается через ядерный плагин <em>filter_html</em> при каждом сохранении (как из формы сущности, так и из инлайн-редактора). Список разрешённых тегов определяет, какие теги и атрибуты сохраняются.'),
     ];
 
     $form['filter']['filter_html'] = [
       '#type' => 'checkbox',
-      '#title' => $this->t('Filter HTML on save'),
-      '#description' => $this->t('When disabled, the raw HTML is stored as-is. Recommended only for sites with a single trusted editor.'),
+      '#title' => $this->t('Фильтровать HTML при сохранении'),
+      '#description' => $this->t('Если выключено — HTML сохраняется как есть. Рекомендуется только для сайтов с одним доверенным редактором.'),
       '#default_value' => (bool) $config->get('filter_html'),
     ];
 
     $form['filter']['allowed_html'] = [
       '#type' => 'textarea',
       '#rows' => 6,
-      '#title' => $this->t('Allowed HTML tags'),
-      '#description' => $this->t('Same format as the Filter module HTML filter. Example: <code>&lt;a href target rel class&gt; &lt;img src alt title width height class data-*&gt;</code>. Use <code>data-*</code> to allow any <code>data-*</code> attribute.'),
+      '#title' => $this->t('Разрешённые HTML-теги'),
+      '#description' => $this->t('Формат такой же, как у фильтра HTML модуля Filter. Пример: <code>&lt;a href target rel class&gt; &lt;img src alt title width height class data-*&gt;</code>. Используйте <code>data-*</code>, чтобы разрешить любой атрибут <code>data-*</code>.'),
       '#default_value' => $config->get('allowed_html'),
     ];
 
-    // ===== File storage =====
+    // ===== Хранилище файлов =====
     $form['files'] = [
       '#type' => 'fieldset',
-      '#title' => $this->t('File storage'),
-      '#description' => $this->t('Controls where the inline editor uploads images and how big they can be.'),
+      '#title' => $this->t('Хранилище файлов'),
+      '#description' => $this->t('Куда инлайн-редактор загружает картинки и какой максимальный размер файла.'),
     ];
 
     $form['files']['upload_location'] = [
       '#type' => 'textfield',
-      '#title' => $this->t('Upload destination'),
-      '#description' => $this->t('Stream wrapper path where inline-uploaded images are stored. Example: <code>public://code-block-field</code>.'),
+      '#title' => $this->t('Путь загрузки'),
+      '#description' => $this->t('Путь со stream wrapper’ом, куда сохраняются картинки, загруженные через инлайн-редактор. Пример: <code>public://code-block-field</code>.'),
       '#default_value' => $config->get('upload_location'),
       '#required' => TRUE,
     ];
 
     $form['files']['max_filesize'] = [
       '#type' => 'textfield',
-      '#title' => $this->t('Maximum upload size'),
-      '#description' => $this->t('Examples: <code>2 MB</code>, <code>1024 KB</code>, <code>1G</code>. Leave empty for the site default.'),
+      '#title' => $this->t('Максимальный размер файла'),
+      '#description' => $this->t('Примеры: <code>2 MB</code>, <code>1024 KB</code>, <code>1G</code>. Оставьте пустым для значения по умолчанию сайта.'),
       '#default_value' => $config->get('max_filesize'),
     ];
 
-    $image_styles = ['' => $this->t('- Original (no style) -')];
+    $image_styles = ['' => $this->t('- Оригинал (без стиля) -')];
     foreach (\Drupal::entityTypeManager()->getStorage('image_style')->loadMultiple() as $style) {
       $image_styles[$style->id()] = $style->label();
     }
     $form['files']['default_image_style'] = [
       '#type' => 'select',
-      '#title' => $this->t('Default image style'),
+      '#title' => $this->t('Стиль изображений по умолчанию'),
       '#options' => $image_styles,
       '#default_value' => $config->get('default_image_style'),
-      '#description' => $this->t('Used by the formatter when the field display does not override it.'),
+      '#description' => $this->t('Используется форматтером, если на уровне поля не задан другой.'),
     ];
 
     // ===== Shadow DOM =====
     $form['shadow'] = [
       '#type' => 'fieldset',
       '#title' => $this->t('Shadow DOM'),
-      '#description' => $this->t('Each code block is rendered inside a Shadow DOM so its CSS does not leak into the host theme. <em>Closed</em> mode prevents external scripts from reaching into the block through <code>element.shadowRoot</code>.'),
+      '#description' => $this->t('Каждый блок рендерится внутри Shadow DOM, чтобы CSS блока не утекал в тему. Режим <em>Closed</em> запрещает внешним скриптам доступ к блоку через <code>element.shadowRoot</code>.'),
     ];
 
     $form['shadow']['shadow_mode'] = [
       '#type' => 'select',
-      '#title' => $this->t('Default Shadow DOM mode'),
+      '#title' => $this->t('Режим Shadow DOM по умолчанию'),
       '#options' => [
-        'open' => $this->t('Open (developer-inspectable)'),
-        'closed' => $this->t('Closed (extra isolation)'),
+        'open' => $this->t('Open (доступен для инспектирования разработчиком)'),
+        'closed' => $this->t('Closed (дополнительная изоляция)'),
       ],
       '#default_value' => $config->get('shadow_mode'),
     ];
 
-    // ===== Inline editor UX =====
+    // ===== Инлайн-редактор =====
     $form['editor'] = [
       '#type' => 'fieldset',
-      '#title' => $this->t('Inline editor'),
-      '#description' => $this->t('Controls when and how the page-builder-style inline editor is exposed to the user.'),
+      '#title' => $this->t('Инлайн-редактор'),
+      '#description' => $this->t('Когда и как показывать инлайн-редактор пользователю.'),
     ];
 
     $form['editor']['expose_edit_button'] = [
       '#type' => 'checkbox',
-      '#title' => $this->t('Show the floating "Edit Mode" button on every page where code blocks are present'),
-      '#description' => $this->t('When disabled, integrators must trigger the editor manually via <code>Drupal.codeBlockField.activate()</code>.'),
+      '#title' => $this->t('Показывать плавающую кнопку «Режим редактирования» на всех страницах с code-блоками'),
+      '#description' => $this->t('Если выключено, интегратор должен запускать редактор вручную через <code>Drupal.codeBlockField.activate()</code>.'),
       '#default_value' => (bool) $config->get('expose_edit_button'),
     ];
 
     $form['editor']['create_revisions'] = [
       '#type' => 'checkbox',
-      '#title' => $this->t('Create a new entity revision on every inline save'),
-      '#description' => $this->t('When enabled, each inline save (text/image/link edit) creates a new revision of the host entity (node, paragraph, etc.). Improves audit trail but produces more revision history entries. Only applies to entity types that support revisions.'),
+      '#title' => $this->t('Создавать новую ревизию сущности при каждом inline-сохранении'),
+      '#description' => $this->t('Если включено — каждое inline-сохранение (правка текста/картинки/ссылки) создаёт новую ревизию сущности (node, paragraph и т.д.). Улучшает аудит, но создаёт больше записей в истории ревизий. Применяется только к типам сущностей, поддерживающим ревизии.'),
       '#default_value' => (bool) $config->get('create_revisions'),
     ];
 
     $form['editor']['revision_log_message'] = [
       '#type' => 'textfield',
-      '#title' => $this->t('Default revision log message'),
-      '#description' => $this->t('Used as the revision log when an inline save creates a revision. <code>%date</code> is replaced with the current date/time.'),
+      '#title' => $this->t('Сообщение лога ревизии по умолчанию'),
+      '#description' => $this->t('Используется как лог ревизии, когда inline-сохранение создаёт ревизию. <code>%date</code> заменяется на текущую дату/время.'),
       '#default_value' => $config->get('revision_log_message') ?: 'Inline edit (%date)',
       '#states' => [
         'visible' => [
@@ -145,45 +147,52 @@ class SettingsForm extends ConfigFormBase {
       ],
     ];
 
-    // ===== Editor colours =====
+    $form['editor']['auto_assign_asset_keys'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t('Автоматически добавлять data-cbf-asset картинкам'),
+      '#description' => $this->t('Если включено — при сохранении всем картинкам &lt;img&gt; без атрибута <code>data-cbf-asset</code> автоматически присваивается уникальный ключ, что позволяет редактировать их в инлайн-режакторе. Если <code>src</code> указывает на managed file Drupal — он также привязывается к полю (с регистрацией file usage).'),
+      '#default_value' => (bool) $config->get('auto_assign_asset_keys'),
+    ];
+
+    // ===== Цвета редактора =====
     $form['colors'] = [
       '#type' => 'fieldset',
-      '#title' => $this->t('Editor colours'),
-      '#description' => $this->t('Visual chrome of the inline editor toolbar and the editable-element affordances. These colours are emitted as CSS custom properties so you can override them per-theme.'),
+      '#title' => $this->t('Цвета редактора'),
+      '#description' => $this->t('Визуальное оформление плавающей панели инлайн-редактора и индикаторов редактируемых элементов. Цвета передаются как CSS custom properties, поэтому их можно переопределить из темы.'),
     ];
 
     $form['colors']['color_toolbar_bg'] = [
       '#type' => 'color',
-      '#title' => $this->t('Toolbar background'),
-      '#description' => $this->t('Background colour of the floating toolbar.'),
+      '#title' => $this->t('Фон панели'),
+      '#description' => $this->t('Фон плавающей панели редактора.'),
       '#default_value' => $config->get('color_toolbar_bg') ?? '#1e1e2e',
     ];
 
     $form['colors']['color_toolbar_accent'] = [
       '#type' => 'color',
-      '#title' => $this->t('Toolbar accent (Edit-mode toggle when active)'),
-      '#description' => $this->t('Background of the "Edit Mode" button when toggled on, and of the toolbar badge.'),
+      '#title' => $this->t('Акцентный цвет панели'),
+      '#description' => $this->t('Фон кнопки «Режим редактирования» во включённом состоянии и бейдж панели.'),
       '#default_value' => $config->get('color_toolbar_accent') ?? '#ff8a3d',
     ];
 
     $form['colors']['color_edit_outline'] = [
       '#type' => 'color',
-      '#title' => $this->t('Editing outline'),
-      '#description' => $this->t('Outline colour drawn around an editable block while edit mode is on.'),
+      '#title' => $this->t('Контур редактирования'),
+      '#description' => $this->t('Цвет рамки вокруг редактируемого блока в режиме редактирования.'),
       '#default_value' => $config->get('color_edit_outline') ?? '#ff8a3d',
     ];
 
     $form['colors']['color_dirty_outline'] = [
       '#type' => 'color',
-      '#title' => $this->t('Dirty outline'),
-      '#description' => $this->t('Outline colour of a block that has unsaved changes.'),
+      '#title' => $this->t('Контур несохранённых изменений'),
+      '#description' => $this->t('Цвет рамки блока с несохранёнными изменениями.'),
       '#default_value' => $config->get('color_dirty_outline') ?? '#28a745',
     ];
 
     $form['colors']['color_focus_outline'] = [
       '#type' => 'color',
-      '#title' => $this->t('Focused outline'),
-      '#description' => $this->t('Outline colour of the block containing the element currently being edited.'),
+      '#title' => $this->t('Контур активного блока'),
+      '#description' => $this->t('Цвет рамки блока, в котором сейчас редактируется элемент.'),
       '#default_value' => $config->get('color_focus_outline') ?? '#0071eb',
     ];
 
@@ -204,6 +213,7 @@ class SettingsForm extends ConfigFormBase {
       ->set('expose_edit_button', (bool) $form_state->getValue('expose_edit_button'))
       ->set('create_revisions', (bool) $form_state->getValue('create_revisions'))
       ->set('revision_log_message', $form_state->getValue('revision_log_message'))
+      ->set('auto_assign_asset_keys', (bool) $form_state->getValue('auto_assign_asset_keys'))
       ->set('color_toolbar_bg', $form_state->getValue('color_toolbar_bg'))
       ->set('color_toolbar_accent', $form_state->getValue('color_toolbar_accent'))
       ->set('color_edit_outline', $form_state->getValue('color_edit_outline'))

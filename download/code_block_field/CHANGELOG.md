@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] — 2026-07-01
+
+### Added
+
+- **Russian interface translation.** All user-facing strings in the module
+  settings form, widget, formatter, modal pickers, help text, permissions,
+  menu link and inline editor (toolbar buttons, context menus, alt-editor
+  popup, save/cancel/error messages) are now in Russian. The strings are
+  still wrapped in `t()` / `Drupal.t()`, so they participate in Drupal's
+  translation system — English sites can override them through a `.po` file.
+- **Auto-assignment of `data-cbf-asset` to images.** New module setting
+  "Автоматически добавлять data-cbf-asset картинкам" (default: on). When
+  enabled, every `<img>` in the HTML that does not already have a
+  `data-cbf-asset` attribute gets a unique key (e.g.
+  `auto-asset-68a1f3-2`) assigned on save — both through the entity form
+  and through the inline editor. This means:
+  - Every image in a code block is editable through the inline editor
+    without manual markup.
+  - If the `src` points to a Drupal managed file (e.g.
+    `/sites/default/files/foo.jpg`), the file is looked up by URI and its
+    `fid` is recorded in the assets map, with `file.usage` registered
+    against the host entity. Existing images immediately become managed
+    assets without manual key assignment.
+  - Image-style derivatives (e.g. `/sites/default/files/styles/large/...`)
+    are resolved back to the original file URI.
+  - Works on Drupal 9.5+ / 10.x / 11.x — uses the
+    `stream_wrapper_manager` service to convert paths to URIs rather than
+    `FileUrlGenerator::generateUriFromString()` (which only exists in
+    Drupal 10.3+).
+
+### Changed
+
+- Module description in `info.yml`, permissions labels, menu link label
+  and help text are now in Russian.
+
 ## [1.1.0] — 2026-07-01
 
 ### Added
@@ -143,6 +178,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with installation, configuration, usage, structure, and customisation
   instructions.
 
+[1.2.0]: https://github.com/Mmitekk/code_block_field/releases/tag/1.2.0
 [1.1.0]: https://github.com/Mmitekk/code_block_field/releases/tag/1.1.0
 [1.0.3]: https://github.com/Mmitekk/code_block_field/releases/tag/1.0.3
 [1.0.2]: https://github.com/Mmitekk/code_block_field/releases/tag/1.0.2

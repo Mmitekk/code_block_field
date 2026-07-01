@@ -29,6 +29,9 @@ code_block_field.settings:
     revision_log_message:
       type: string
       label: 'Default revision log message (used when create_revisions is on)'
+    auto_assign_asset_keys:
+      type: boolean
+      label: 'Auto-assign data-cbf-asset attribute to <img> tags on save'
     color_toolbar_bg:
       type: string
       label: 'Inline-editor toolbar background colour'
