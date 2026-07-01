@@ -1,0 +1,34 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for the Code Block Field module.
+ */
+
+declare(strict_types=1);
+
+use Drupal\Core\Url;
+
+/**
+ * Implements hook_install().
+ */
+function code_block_field_install(): void {
+  \Drupal::messenger()->addStatus(t('Code Block Field has been installed. Add a new "Code Block (HTML / CSS / JS)" field to any entity from the <a href=":fields">Field management</a> page, then assign the "Code Block editor (CodeMirror)" widget and the "Code Block (Shadow DOM, inline-editable)" formatter.', [
+    ':fields' => Url::fromRoute('entity.field_storage_config.collection')->toString(),
+  ]));
+  \Drupal::messenger()->addStatus(t('Configure global options on the <a href=":settings">module settings page</a>.', [
+    ':settings' => Url::fromRoute('code_block_field.settings')->toString(),
+  ]));
+}
+
+/**
+ * Implements hook_uninstall().
+ *
+ * Drops the module configuration. Field storage and field data are
+ * automatically removed by Drupal's field storage handler.
+ */
+function code_block_field_uninstall(): void {
+  // Drupal removes configuration automatically. Nothing else to clean up:
+  // file usage records are released by hook_entity_delete() when the host
+  // entity is deleted.
+}

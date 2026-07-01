@@ -23,3 +23,18 @@ code_block_field.settings:
     expose_edit_button:
       type: boolean
       label: 'Show the floating Edit Mode button on every page where Code Block fields are present'
+    color_toolbar_bg:
+      type: string
+      label: 'Inline-editor toolbar background colour'
+    color_toolbar_accent:
+      type: string
+      label: 'Inline-editor toolbar accent colour'
+    color_edit_outline:
+      type: string
+      label: 'Outline of an editable block while edit mode is on'
+    color_dirty_outline:
+      type: string
+      label: 'Outline of a block with unsaved changes'
+    color_focus_outline:
+      type: string
+      label: 'Outline of the block containing the element currently being edited'

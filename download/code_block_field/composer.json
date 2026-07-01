@@ -1,0 +1,55 @@
+{
+  "name": "mmitekk/code_block_field",
+  "type": "drupal-custom-module",
+  "description": "Provides a field type with HTML/CSS/JS sub-fields and a page-builder-style inline editor. Each block is rendered inside an isolated Shadow DOM and can be edited in place (text, images, links) without opening the host entity.",
+  "keywords": [
+    "drupal",
+    "field",
+    "html",
+    "css",
+    "js",
+    "shadow-dom",
+    "inline-editor",
+    "page-builder",
+    "codemirror"
+  ],
+  "homepage": "https://github.com/Mmitekk/code_block_field",
+  "license": "GPL-2.0-or-later",
+  "authors": [
+    {
+      "name": "Mmitekk",
+      "homepage": "https://github.com/Mmitekk",
+      "role": "Maintainer"
+    }
+  ],
+  "support": {
+    "issues": "https://github.com/Mmitekk/code_block_field/issues",
+    "source": "https://github.com/Mmitekk/code_block_field"
+  },
+  "require": {
+    "drupal/core": "^10 || ^11",
+    "ext-dom": "*",
+    "ext-json": "*"
+  },
+  "require-dev": {
+    "drupal/devel": "^5"
+  },
+  "suggest": {
+    "drupal/admin_toolbar": "Удобная навигация по админ-меню Drupal / Handy navigation through Drupal admin menus.",
+    "drupal/image_style_warmer": "Прогрев image-стилей для inline-загружаемых картинок / Pre-warm image styles for inline-uploaded images.",
+    "drupal/media_library": "Альтернативный способ выбора медиа-объектов (если нужен) / Alternative media picker (if needed)."
+  },
+  "extra": {
+    "drupal": {
+      "packageName": "mmitekk/code_block_field",
+      "version": "1.0.0",
+      "security-coverage": {
+        "status": "not-covered",
+        "message": "Покрытие безопасности не проверяется для этого модуля / Security coverage is not checked for this module."
+      }
+    },
+    "installer-paths": {
+      "web/modules/custom/{$name}": ["type:drupal-custom-module"]
+    }
+  }
+}

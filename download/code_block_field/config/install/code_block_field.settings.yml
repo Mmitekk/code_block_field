@@ -5,3 +5,8 @@ upload_location: 'public://code-block-field'
 max_filesize: '5 MB'
 shadow_mode: 'open'
 expose_edit_button: true
+color_toolbar_bg: '#1e1e2e'
+color_toolbar_accent: '#ff8a3d'
+color_edit_outline: '#ff8a3d'
+color_dirty_outline: '#28a745'
+color_focus_outline: '#0071eb'

@@ -1,12 +1,30 @@
 /**
  * Inline editor visual chrome.
  *
+ * Colours are emitted as CSS custom properties by the inline-editor.js
+ * behaviour from drupalSettings.code_block_field.colors — they can be
+ * overridden through the module settings page
+ * (/admin/config/content/code-block-field) or directly from a theme.
+ *
  *  - Floating toolbar (top-right) shown on pages where the inline editor
  *    is enabled.
  *  - Visual affordances for editable text / images / links inside the
  *    Shadow DOM.
  *  - Hover outlines, dirty indicators, focus rings.
  */
+
+/* ------------------------------------------------------------------ */
+/* CSS custom properties (overridable from theme)                      */
+/* ------------------------------------------------------------------ */
+
+.cbf-inline-toolbar,
+body.cbf-inline-editing {
+  --cbf-toolbar-bg: #1e1e2e;
+  --cbf-toolbar-accent: #ff8a3d;
+  --cbf-edit-outline: #ff8a3d;
+  --cbf-dirty-outline: #28a745;
+  --cbf-focus-outline: #0071eb;
+}
 
 /* ------------------------------------------------------------------ */
 /* Floating toolbar                                                    */
@@ -21,7 +39,7 @@
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  background: #1e1e2e;
+  background: var(--cbf-toolbar-bg);
   color: #fff;
   border-radius: 10px;
   box-shadow: 0 8px 24px rgba(15, 17, 32, 0.35);
@@ -44,7 +62,7 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #ff8a3d;
+  background: var(--cbf-toolbar-accent);
 }
 
 .cbf-inline-toolbar__btn {
@@ -71,9 +89,9 @@
 }
 
 .cbf-inline-toolbar__btn--primary.is-active {
-  background: #ff8a3d;
-  border-color: #ff8a3d;
-  color: #1e1e2e;
+  background: var(--cbf-toolbar-accent);
+  border-color: var(--cbf-toolbar-accent);
+  color: var(--cbf-toolbar-bg);
   font-weight: 600;
 }
 
@@ -101,19 +119,19 @@ body.cbf-inline-editing {
 }
 
 .cbf-host--editing {
-  outline: 2px dashed rgba(255, 138, 61, 0.6);
+  outline: 2px dashed var(--cbf-edit-outline);
   outline-offset: -2px;
 }
 
 .cbf-host--dirty {
-  outline-color: #28a745;
+  outline-color: var(--cbf-dirty-outline);
 }
 
 .cbf-host--focused {
-  outline-color: #0071eb;
+  outline-color: var(--cbf-focus-outline);
 }
 
-/* Badge that appears in the top-right corner of a dirty block while editing. */
+/* Badge that appears in the top-right corner of a block while editing. */
 .cbf-host--editing::before {
   content: attr(data-cbf-field-name) ' #' attr(data-cbf-delta);
   position: absolute;
@@ -129,25 +147,9 @@ body.cbf-inline-editing {
 }
 
 .cbf-host--dirty::before {
-  background: rgba(40, 167, 69, 0.92);
+  background: var(--cbf-dirty-outline);
 }
 
-/* ------------------------------------------------------------------ */
-/* Editable affordances INSIDE the shadow DOM.                          */
-/* These rules live outside the shadow root and use the :host-context() */
-/* pseudo-class to apply only when the page is in inline-editing mode.  */
-/* ------------------------------------------------------------------ */
-
-.cbf-host--editing > * {
-  /* The shadow root itself is invisible to CSS, but children are. */
-}
-
-/* The actual editable styles are injected into each shadow root at runtime
-   by the inline editor — see enableEditing() in inline-editor.js. */
-
-/* But we can style the .cbf-editable-image and .cbf-link-handle here only
-   if we use ::part(), which requires the elements to have part attributes.
-   For simplicity, the JS injects a <style> tag into each shadow root with
-   the rules below. */
-
-/* The styles below apply to the toolbar and badge (host document) only. */
+/* The actual editable styles (text, image, link handle) live INSIDE each
+   shadow root — they are injected at runtime by inline-editor.js through
+   the SHADOW_EDIT_STYLES constant. */
