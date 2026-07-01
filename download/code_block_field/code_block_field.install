@@ -32,3 +32,41 @@ function code_block_field_uninstall(): void {
   // нечего: file usage записи освобождаются через hook_entity_delete()
   // при удалении сущности-хоста.
 }
+
+/**
+ * Update 8101: расширяем allowed_html для поддержки SVG-атрибутов.
+ *
+ * До версии 1.2.2 фильтр HTML срезал презентационные атрибуты SVG
+ * (fill, stroke, stroke-width, stroke-linecap, stroke-linejoin, и т.д.),
+ * из-за чего иконки вроде
+ * <svg fill="none" stroke="currentColor" stroke-width="2.5">
+ *   <polyline points="20 6 9 17 4 12" />
+ * </svg>
+ * после сохранения теряли эти атрибуты.
+ *
+ * Этот апдейт заменяет allowed_html на новый, расширенный список, но
+ * только если пользователь ещё не настраивал его вручную (то есть если
+ * текущее значение совпадает со старым дефолтным). Если пользователь
+ * уже правил allowed_html под себя — мы не трогаем его значение, а
+ * показываем сообщение с инструкцией.
+ */
+function code_block_field_update_8101(): void {
+  $config = \Drupal::configFactory()->getEditable('code_block_field.settings');
+  $current = $config->get('allowed_html');
+
+  // Старый дефолт из версии 1.1.0 — 1.2.1.
+  $old_default = '<a href hreflang target rel title class data-*> <em> <strong> <b> <i> <u> <s> <code> <pre> <blockquote> <br> <p class style> <h1 class style> <h2 class style> <h3 class style> <h4 class style> <h5 class style> <h6 class style> <ul type class style> <ol type class start style> <li class style> <dl class> <dt> <dd> <table class style> <thead> <tbody> <tfoot> <tr style> <td colspan rowspan class style> <th colspan rowspan class style> <caption> <div class id style data-*> <span class id style data-*> <img src alt title width height class style data-*> <picture> <source srcset media> <figure class style> <figcaption> <section class style> <article class style> <header class style> <footer class style> <nav class style> <main class style> <aside class style> <video src controls width height style> <audio src controls style> <iframe src width height frameborder allowfullscreen style> <svg class viewBox xmlns width height style> <use href> <path d> <circle cx cy r> <rect x y width height> <line x1 y1 x2 y2> <polyline points> <polygon points>';
+
+  // Новый дефолт из версии 1.2.2.
+  $new_default = '<a href hreflang target rel title class style data-*> <em class style> <strong class style> <b class style> <i class style> <u class style> <s class style> <code class style> <pre class style> <blockquote class style> <br> <p class style> <h1 class style> <h2 class style> <h3 class style> <h4 class style> <h5 class style> <h6 class style> <ul type class style> <ol type class start style> <li class style> <dl class> <dt> <dd> <table class style> <thead> <tbody> <tfoot> <tr style> <td colspan rowspan class style> <th colspan rowspan class style> <caption> <div class id style data-*> <span class id style data-*> <img src alt title width height class style data-*> <picture> <source srcset media sizes type> <figure class style> <figcaption class style> <section class style> <article class style> <header class style> <footer class style> <nav class style> <main class style> <aside class style> <video src controls width height style poster preload> <audio src controls style preload> <iframe src width height frameborder allowfullscreen style loading> <svg class viewBox xmlns width height style fill stroke stroke-width stroke-linecap stroke-linejoin stroke-dasharray stroke-dashoffset stroke-opacity fill-opacity fill-rule clip-path opacity transform> <use href xlink:href> <path d fill stroke stroke-width stroke-linecap stroke-linejoin stroke-dasharray stroke-dashoffset stroke-opacity fill-opacity fill-rule clip-path opacity transform> <circle cx cy r fill stroke stroke-width stroke-linecap stroke-linejoin stroke-dasharray stroke-dashoffset stroke-opacity fill-opacity opacity transform> <rect x y width height rx ry fill stroke stroke-width stroke-linecap stroke-linejoin stroke-dasharray stroke-dashoffset stroke-opacity fill-opacity opacity transform> <line x1 y1 x2 y2 fill stroke stroke-width stroke-linecap stroke-linejoin stroke-dasharray stroke-opacity opacity transform> <polyline points fill stroke stroke-width stroke-linecap stroke-linejoin stroke-dasharray stroke-opacity fill-opacity opacity transform> <polygon points fill stroke stroke-width stroke-linecap stroke-linejoin stroke-dasharray stroke-opacity fill-opacity opacity transform> <ellipse cx cy rx ry fill stroke stroke-width stroke-opacity fill-opacity opacity transform> <g fill stroke stroke-width stroke-linecap stroke-linejoin stroke-dasharray stroke-opacity fill-opacity opacity transform> <defs> <clipPath id> <mask id> <linearGradient id x1 y1 x2 y2> <radialGradient id cx cy r fx fy> <stop offset stop-color stop-opacity>';
+
+  if ($current === $old_default) {
+    // Пользователь не менял allowed_html — заменяем на новый дефолт.
+    $config->set('allowed_html', $new_default)->save();
+    \Drupal::messenger()->addStatus(t('Список разрешённых HTML-тегов обновлён для поддержки SVG-атрибутов (fill, stroke, stroke-width и т.д.). Если вы ранее настраивали allowed_html вручную — проверьте настройки модуля на странице /admin/config/content/code-block-field.'));
+  }
+  else {
+    // Пользователь уже правил allowed_html — не трогаем, но предупредим.
+    \Drupal::messenger()->addWarning(t('Внимание: в Code Block Field расширена поддержка SVG (fill, stroke, stroke-width и др.). Ваш список разрешённых HTML-тегов был изменён вручную, поэтому автоматического обновления не произошло. Если SVG-атрибуты срезаются при сохранении — добавьте их в allowed_html на странице /admin/config/content/code-block-field. Подробности в CHANGELOG.md, версия 1.2.2.'));
+  }
+}
