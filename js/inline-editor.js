@@ -1345,8 +1345,16 @@
           },
           body: JSON.stringify(payload),
         }).then(function (r) {
-          return r.json().then(function (j) {
-            return { host: host, response: j, ok: r.ok };
+          // Handle non-JSON responses (e.g., HTML error pages from
+          // access-denied or server errors).
+          return r.text().then(function (text) {
+            let json;
+            try {
+              json = JSON.parse(text);
+            } catch (e) {
+              json = { error: 'Server returned non-JSON response (HTTP ' + r.status + '): ' + text.substring(0, 500) };
+            }
+            return { host: host, response: json, ok: r.ok, status: r.status };
           });
         }));
       });
@@ -1354,6 +1362,26 @@
 
     Promise.all(saves).then(function (results) {
       const failed = results.filter(function (r) { return !r.ok || (r.response && r.response.error); });
+      // Log each save result to the console for debugging.
+      results.forEach(function (r) {
+        if (r.ok && !r.response.error) {
+          // eslint-disable-next-line no-console
+          console.log('Code Block Field: saved', {
+            entity_type: r.host.getAttribute('data-cbf-entity-type'),
+            entity_id: r.host.getAttribute('data-cbf-entity-id'),
+            field: r.host.getAttribute('data-cbf-field-name'),
+            delta: r.host.getAttribute('data-cbf-delta'),
+            response: r.response,
+          });
+        } else {
+          // eslint-disable-next-line no-console
+          console.error('Code Block Field: save failed', {
+            status: r.status,
+            response: r.response,
+            host: r.host,
+          });
+        }
+      });
       results.forEach(function (r) {
         r.host.classList.remove('cbf-host--dirty');
       });
@@ -1365,7 +1393,10 @@
       if (failed.length) {
         // eslint-disable-next-line no-console
         console.error('Code Block Field: save failed for some blocks', failed);
-        window.alert(Drupal.t('Некоторые блоки не удалось сохранить. Подробности — в консоли браузера.'));
+        const errorMsg = failed[0].response && failed[0].response.error
+          ? failed[0].response.error
+          : Drupal.t('HTTP @status', { '@status': failed[0].status });
+        window.alert(Drupal.t('Не удалось сохранить блоки: @error', { '@error': errorMsg }));
       } else {
         setHint(Drupal.t('Все изменения сохранены.'));
         setTimeout(function () { setHint(''); }, 3000);
@@ -1377,7 +1408,7 @@
         saveBtn.textContent = Drupal.t('Сохранить');
         saveBtn.disabled = false;
       }
-      window.alert(Drupal.t('Сохранение не удалось. Подробности — в консоли браузера.'));
+      window.alert(Drupal.t('Сохранение не удалось: @error', { '@error': err.message || err }));
     });
   }
 

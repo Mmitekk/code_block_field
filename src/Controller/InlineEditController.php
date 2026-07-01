@@ -261,9 +261,39 @@ class InlineEditController extends ControllerBase {
 
     try {
       $entity->save();
+
+      // If the saved entity is a Paragraph (or any entity with a parent
+      // entity reference), we also need to save the parent so that the
+      // parent's reference to this entity is updated. Without this,
+      // inline-edited paragraphs inside a node's paragraphs field or
+      // inside a Layout Builder section would appear "not saved" because
+      // the parent entity still references the old revision/content.
+      if (method_exists($entity, 'getParentEntity')) {
+        try {
+          $parent = $entity->getParentEntity();
+          if ($parent) {
+            $parent->save();
+          }
+        } catch (\Throwable $parent_e) {
+          // Log but don't fail — the paragraph itself was saved
+          // successfully, the parent save is best-effort.
+          \Drupal::logger('code_block_field')->warning('Inline save: paragraph saved but parent entity save failed: @message', [
+            '@message' => $parent_e->getMessage(),
+          ]);
+        }
+      }
     } catch (\Throwable $e) {
       return new JsonResponse(['error' => 'Save failed: ' . $e->getMessage()], 500);
     }
+
+    // Log the successful save for debugging.
+    \Drupal::logger('code_block_field')->debug('Inline save: entity_type=@type, entity_id=@id, field=@field, delta=@delta, html_length=@len', [
+      '@type' => $entity->getEntityTypeId(),
+      '@id' => $entity->id(),
+      '@field' => $payload['field_name'],
+      '@delta' => $delta,
+      '@len' => strlen($filtered_html),
+    ]);
 
     $response_data = [
       'success' => TRUE,
