@@ -77,14 +77,16 @@ function code_block_field_field_widget_info_alter(array &$info): void {
 /**
  * Implements hook_entity_presave().
  *
- * For host entities that don't run our widget (e.g. inline-saved ones), make
- * sure asset file usage stays in sync. The actual usage registration for
- * widget-submitted values happens in CodeBlockWidget::extractFormValues().
+ * IMPORTANT: This hook used to filter the HTML through filter_html and to
+ * auto-assign data-cbf-asset attributes to <img> tags. Both behaviours
+ * have been REMOVED in 1.3.0 because they were causing HTML to be
+ * mangled (SVG attributes like viewBox were being lowercased, tags were
+ * being self-closed, etc.) on some sites despite multiple attempts to
+ * fix them with regex-based alternatives.
  *
- * Also runs the auto-asset-assignment routine: every <img> inside the
- * field's HTML that does not have a data-cbf-asset attribute gets a unique
- * key assigned, and if its src points to a Drupal managed file, the file
- * is looked up and registered in the assets map (with file.usage tracking).
+ * The field now stores whatever HTML the author entered, verbatim. The
+ * only thing this hook still does is register file usage for managed
+ * assets referenced in the field's assets map.
  *
  * This hook fires for every entity type (including config entities such as
  * FieldStorageConfig), so we must guard against entities that do not
@@ -95,44 +97,15 @@ function code_block_field_entity_presave(\Drupal\Core\Entity\EntityInterface $en
   if (!$entity instanceof \Drupal\Core\Entity\FieldableEntityInterface) {
     return;
   }
-  $config = \Drupal::config('code_block_field.settings');
-  $auto_assign = (bool) $config->get('auto_assign_asset_keys');
-  $filter_html = (bool) $config->get('filter_html');
-  $allowed_html = $config->get('allowed_html');
   foreach ($entity->getFields() as $field_name => $fieldItemList) {
     $definition = $fieldItemList->getFieldDefinition();
     if ($definition->getType() !== 'code_block') {
       continue;
     }
     foreach ($fieldItemList as $delta => $item) {
-      // Auto-assign data-cbf-asset to <img> tags that don't have one.
-      if ($auto_assign && !empty($item->html)) {
-        $assets = is_array($item->assets) ? $item->assets : [];
-        $new_html = \Drupal\code_block_field\ProcessImages::process(
-          (string) $item->html,
-          $assets,
-          $entity
-        );
-        if ($new_html !== $item->html) {
-          $item->html = $new_html;
-        }
-        if ($assets !== (is_array($item->assets) ? $item->assets : [])) {
-          $item->assets = $assets;
-        }
-      }
-
-      // Filter HTML on save (when filter_html is enabled). This runs once,
-      // at save time — the formatter no longer re-filters on render to
-      // avoid DOMDocument normalising SVG attribute names (viewBox →
-      // viewbox) and breaking the case-sensitive whitelist match.
-      if ($filter_html && $allowed_html && !empty($item->html)) {
-        $filtered = code_block_field_filter_html((string) $item->html, $allowed_html);
-        if ($filtered !== $item->html) {
-          $item->html = $filtered;
-        }
-      }
-
-      // Register file usage for all known assets.
+      // Register file usage for all known assets. We do NOT modify the
+      // HTML in any way — the field stores exactly what the author
+      // entered.
       $assets = is_array($item->assets) ? $item->assets : [];
       foreach ($assets as $asset) {
         $fid = $asset['fid'] ?? 0;
