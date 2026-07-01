@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] — 2026-07-01
+
+### Fixed
+
+- **TypeError on saving a paragraph with a Code Block field.**
+  `CodeBlockWidget::extractFormValues()` declared a strict `: array` return
+  type and returned the value of `parent::extractFormValues()`. In Drupal 11
+  the parent method has no return type and does not actually return a value
+  (it works via side-effects on `$items`), so `null` was returned and the
+  strict type check threw `TypeError: Return value must be of type array,
+  null returned`.
+- Removed the `extractFormValues()` override entirely. File-usage
+  registration for managed assets is already handled by
+  `hook_entity_presave()` (which is properly guarded against non-fieldable
+  entities since 1.0.1), so the override was duplicating work and was the
+  only reason the fatal occurred.
+
 ## [1.0.1] — 2026-07-01
 
 ### Fixed
@@ -50,5 +67,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with installation, configuration, usage, structure, and customisation
   instructions.
 
+[1.0.2]: https://github.com/Mmitekk/code_block_field/releases/tag/1.0.2
 [1.0.1]: https://github.com/Mmitekk/code_block_field/releases/tag/1.0.1
 [1.0.0]: https://github.com/Mmitekk/code_block_field/releases/tag/1.0.0
