@@ -180,7 +180,14 @@ function code_block_field_entity_delete(\Drupal\Core\Entity\EntityInterface $ent
 }
 
 /**
- * Filters an HTML string using the core filter_html plugin.
+ * Filters an HTML string using a case-sensitive regex-based filter.
+ *
+ * The core filter_html plugin uses DOMDocument internally, which lowercases
+ * attribute names — this breaks SVG attributes like `viewBox` because the
+ * whitelist check in filter_html is case-sensitive. This helper uses a
+ * regex-based filter (Drupal\code_block_field\HtmlFilter) that preserves
+ * the original case of attribute names while still enforcing the
+ * allowed_html whitelist.
  *
  * Centralised helper used by both hook_entity_presave() (for entity-form
  * saves) and InlineEditController::save() (for inline saves) so that the
@@ -198,13 +205,5 @@ function code_block_field_filter_html(string $html, string $allowed_html): strin
   if (!$allowed_html) {
     return $html;
   }
-  /** @var \Drupal\filter\Plugin\FilterInterface $filter */
-  $filter = \Drupal::service('plugin.manager.filter')->createInstance('filter_html', [
-    'settings' => [
-      'allowed_html' => $allowed_html,
-      'filter_html_help' => FALSE,
-      'filter_html_nofollow' => FALSE,
-    ],
-  ]);
-  return (string) $filter->process($html, 'und');
+  return \Drupal\code_block_field\HtmlFilter::filter($html, $allowed_html);
 }
