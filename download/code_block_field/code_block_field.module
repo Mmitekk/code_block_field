@@ -80,9 +80,14 @@ function code_block_field_field_widget_info_alter(array &$info): void {
  * For host entities that don't run our widget (e.g. inline-saved ones), make
  * sure asset file usage stays in sync. The actual usage registration for
  * widget-submitted values happens in CodeBlockWidget::extractFormValues().
+ *
+ * This hook fires for every entity type (including config entities such as
+ * FieldStorageConfig), so we must guard against entities that do not
+ * implement FieldableEntityInterface — calling getFieldDefinitions() / 
+ * getFields() on them would throw a fatal error.
  */
 function code_block_field_entity_presave(\Drupal\Core\Entity\EntityInterface $entity): void {
-  if (!$entity->getFieldDefinitions()) {
+  if (!$entity instanceof \Drupal\Core\Entity\FieldableEntityInterface) {
     return;
   }
   foreach ($entity->getFields() as $field_name => $fieldItemList) {
@@ -110,8 +115,13 @@ function code_block_field_entity_presave(\Drupal\Core\Entity\EntityInterface $en
  * Implements hook_entity_delete().
  *
  * Releases file usage for all code_block assets attached to the entity.
+ * Same guard as in hook_entity_presave(): only fieldable entities have
+ * fields to iterate.
  */
 function code_block_field_entity_delete(\Drupal\Core\Entity\EntityInterface $entity): void {
+  if (!$entity instanceof \Drupal\Core\Entity\FieldableEntityInterface) {
+    return;
+  }
   foreach ($entity->getFields() as $fieldItemList) {
     if ($fieldItemList->getFieldDefinition()->getType() !== 'code_block') {
       continue;
