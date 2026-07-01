@@ -1,2 +1,23 @@
-skills/
-node_modules/
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor / IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Local copies of CodeMirror (drop into assets/codemirror/ if you don't want
+# to load from CDN — keep them out of the repo to avoid bloating it).
+assets/codemirror/*
+
+# Composer / Drush local installs
+vendor/
+drush/
+
+# Test artefacts
+.phpunit.result.cache
+*.log
