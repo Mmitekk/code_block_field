@@ -80,13 +80,13 @@
         Code Block
       </div>
       <button type="button" class="cbf-inline-toolbar__btn cbf-inline-toolbar__btn--primary cbf-js-toggle" aria-pressed="false">
-        ${Drupal.t('Edit mode')}
+        ${Drupal.t('Режим редактирования')}
       </button>
       <button type="button" class="cbf-inline-toolbar__btn cbf-js-save" disabled>
-        ${Drupal.t('Save changes')}
+        ${Drupal.t('Сохранить')}
       </button>
       <button type="button" class="cbf-inline-toolbar__btn cbf-js-cancel" disabled>
-        ${Drupal.t('Cancel')}
+        ${Drupal.t('Отмена')}
       </button>
       <span class="cbf-inline-toolbar__hint"></span>
     `;
@@ -134,13 +134,13 @@
       }
     });
 
-    setHint(state.active ? Drupal.t('Editing. Click text to edit, click an image to replace.') : '');
+    setHint(state.active ? Drupal.t('Режим редактирования. Кликните по тексту для правки, по картинке — для замены.') : '');
     updateSaveButton();
   }
 
   function onCancel() {
     if (state.dirty.size > 0) {
-      if (!window.confirm(Drupal.t('Discard unsaved changes?'))) {
+      if (!window.confirm(Drupal.t('Сбросить несохранённые изменения?'))) {
         return;
       }
     }
@@ -434,7 +434,7 @@
       const handle = document.createElement('span');
       handle.className = 'cbf-link-handle';
       handle.setAttribute('contenteditable', 'false');
-      handle.title = Drupal.t('Edit link');
+      handle.title = Drupal.t('Редактировать ссылку');
       handle.textContent = '✎';
       handle.addEventListener('click', function (e) {
         e.preventDefault();
@@ -454,7 +454,7 @@
       const insertBtn = document.createElement('button');
       insertBtn.type = 'button';
       insertBtn.className = 'cbf-insert-img-btn';
-      insertBtn.title = Drupal.t('Insert image');
+      insertBtn.title = Drupal.t('Вставить изображение');
       insertBtn.textContent = '+';
       insertBtn.setAttribute('contenteditable', 'false');
       insertBtn.addEventListener('click', function (e) {
@@ -465,7 +465,7 @@
       host.appendChild(insertBtn);
     }
 
-    setHint(Drupal.t('Editing “%s”.', { '%s': getInstanceId(host) }));
+    setHint(Drupal.t('Редактируется «%s».', { '%s': getInstanceId(host) }));
   }
 
   function disableEditing(host) {
@@ -628,31 +628,31 @@
     formatToolbar.setAttribute('contenteditable', 'false');
     formatToolbar.style.display = 'none';
     formatToolbar.innerHTML = `
-      <button type="button" data-cmd="bold" title="${Drupal.t('Bold')}" aria-label="${Drupal.t('Bold')}"><b>B</b></button>
-      <button type="button" data-cmd="italic" title="${Drupal.t('Italic')}" aria-label="${Drupal.t('Italic')}"><i>I</i></button>
-      <button type="button" data-cmd="underline" title="${Drupal.t('Underline')}" aria-label="${Drupal.t('Underline')}"><u>U</u></button>
-      <button type="button" data-cmd="strikeThrough" title="${Drupal.t('Strikethrough')}" aria-label="${Drupal.t('Strikethrough')}"><s>S</s></button>
+      <button type="button" data-cmd="bold" title="${Drupal.t('Жирный')}" aria-label="${Drupal.t('Жирный')}"><b>B</b></button>
+      <button type="button" data-cmd="italic" title="${Drupal.t('Курсив')}" aria-label="${Drupal.t('Курсив')}"><i>I</i></button>
+      <button type="button" data-cmd="underline" title="${Drupal.t('Подчёркнутый')}" aria-label="${Drupal.t('Подчёркнутый')}"><u>U</u></button>
+      <button type="button" data-cmd="strikeThrough" title="${Drupal.t('Зачёркнутый')}" aria-label="${Drupal.t('Зачёркнутый')}"><s>S</s></button>
       <span class="cbf-format-toolbar__sep"></span>
       <button type="button" data-block="h2" title="H2"><b>H2</b></button>
       <button type="button" data-block="h3" title="H3"><b>H3</b></button>
       <button type="button" data-block="h4" title="H4"><b>H4</b></button>
-      <button type="button" data-block="p" title="${Drupal.t('Paragraph')}">¶</button>
+      <button type="button" data-block="p" title="${Drupal.t('Абзац')}">¶</button>
       <span class="cbf-format-toolbar__sep"></span>
-      <button type="button" data-cmd="justifyLeft" title="${Drupal.t('Align left')}">⬅</button>
-      <button type="button" data-cmd="justifyCenter" title="${Drupal.t('Align center')}">⬌</button>
-      <button type="button" data-cmd="justifyRight" title="${Drupal.t('Align right')}">➡</button>
-      <button type="button" data-cmd="justifyFull" title="${Drupal.t('Justify')}">☰</button>
+      <button type="button" data-cmd="justifyLeft" title="${Drupal.t('По левому краю')}">⬅</button>
+      <button type="button" data-cmd="justifyCenter" title="${Drupal.t('По центру')}">⬌</button>
+      <button type="button" data-cmd="justifyRight" title="${Drupal.t('По правому краю')}">➡</button>
+      <button type="button" data-cmd="justifyFull" title="${Drupal.t('По ширине')}">☰</button>
       <span class="cbf-format-toolbar__sep"></span>
-      <button type="button" data-cmd="insertUnorderedList" title="${Drupal.t('Bulleted list')}">•</button>
-      <button type="button" data-cmd="insertOrderedList" title="${Drupal.t('Numbered list')}">1.</button>
+      <button type="button" data-cmd="insertUnorderedList" title="${Drupal.t('Маркированный список')}">•</button>
+      <button type="button" data-cmd="insertOrderedList" title="${Drupal.t('Нумерованный список')}">1.</button>
       <span class="cbf-format-toolbar__sep"></span>
-      <label class="cbf-format-toolbar__color" title="${Drupal.t('Text color')}">
+      <label class="cbf-format-toolbar__color" title="${Drupal.t('Цвет текста')}">
         <span class="cbf-format-toolbar__color-icon">A</span>
         <input type="color" data-cmd="foreColor" value="#000000">
       </label>
       <span class="cbf-format-toolbar__sep"></span>
-      <button type="button" data-cmd="createLink" title="${Drupal.t('Link')}">🔗</button>
-      <button type="button" data-cmd="removeFormat" title="${Drupal.t('Clear formatting')}">⌫</button>
+      <button type="button" data-cmd="createLink" title="${Drupal.t('Ссылка')}">🔗</button>
+      <button type="button" data-cmd="removeFormat" title="${Drupal.t('Очистить форматирование')}">⌫</button>
     `;
     document.body.appendChild(formatToolbar);
 
@@ -986,18 +986,18 @@
     menu.setAttribute('contenteditable', 'false');
     const items = [];
     if (!opts || !opts.noReplace) {
-      items.push({ label: Drupal.t('Replace image'), action: function () { openImagePicker(host, img); } });
-      items.push({ label: Drupal.t('Upload from URL…'), action: function () { uploadFromUrl(host, img); } });
+      items.push({ label: Drupal.t('Заменить изображение'), action: function () { openImagePicker(host, img); } });
+      items.push({ label: Drupal.t('Загрузить по URL…'), action: function () { uploadFromUrl(host, img); } });
     }
-    items.push({ label: Drupal.t('Edit alt text'), action: function () { editImageAltOnTheSpot(host, img); } });
+    items.push({ label: Drupal.t('Редактировать alt-текст'), action: function () { editImageAltOnTheSpot(host, img); } });
     items.push({ sep: true });
-    items.push({ label: Drupal.t('Reset size'), action: function () {
+    items.push({ label: Drupal.t('Сбросить размер'), action: function () {
       img.style.width = '';
       img.style.height = '';
       markDirty(host);
     } });
     items.push({ sep: true });
-    items.push({ label: Drupal.t('Delete image'), danger: true, action: function () {
+    items.push({ label: Drupal.t('Удалить изображение'), danger: true, action: function () {
       img.parentNode && img.parentNode.removeChild(img);
       markDirty(host);
     } });
@@ -1045,11 +1045,11 @@
     input.type = 'text';
     input.className = 'cbf-alt-editor__input';
     input.value = img.getAttribute('alt') || '';
-    input.placeholder = Drupal.t('Alt text (for accessibility)');
+    input.placeholder = Drupal.t('Alt-текст (для доступности)');
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'cbf-alt-editor__btn';
-    btn.textContent = Drupal.t('Save');
+    btn.textContent = Drupal.t('Сохранить');
     btn.addEventListener('click', function (ev) {
       ev.preventDefault();
       img.setAttribute('alt', input.value);
@@ -1078,7 +1078,7 @@
 
   function uploadFromUrl(host, img) {
     closeAllPopups();
-    const url = window.prompt(Drupal.t('Image URL (https://…)'), img.getAttribute('src') || '');
+    const url = window.prompt(Drupal.t('URL изображения (https://…)'), img.getAttribute('src') || '');
     if (!url) {
       return;
     }
@@ -1156,7 +1156,7 @@
     const ajax = Drupal.ajax({
       url: url,
       dialogType: 'modal',
-      dialog: { width: 600, title: Drupal.t('Replace image') },
+      dialog: { width: 600, title: Drupal.t('Заменить изображение') },
     });
     ajax.execute();
     // Listen for the global "image picked" event sent by the modal form.
@@ -1196,7 +1196,7 @@
     const ajax = Drupal.ajax({
       url: url,
       dialogType: 'modal',
-      dialog: { width: 500, title: Drupal.t('Edit link') },
+      dialog: { width: 500, title: Drupal.t('Редактировать ссылку') },
     });
     ajax.execute();
     document.addEventListener('codeBlockFieldLinkPicked', function onPick(ev) {
@@ -1302,7 +1302,7 @@
     const saveBtn = document.querySelector('.cbf-js-save');
     if (saveBtn) {
       saveBtn.disabled = true;
-      saveBtn.textContent = Drupal.t('Saving…');
+      saveBtn.textContent = Drupal.t('Сохранение…');
     }
 
     const saves = [];
@@ -1359,25 +1359,25 @@
       });
       state.dirty.clear();
       if (saveBtn) {
-        saveBtn.textContent = Drupal.t('Save changes');
+        saveBtn.textContent = Drupal.t('Сохранить');
         saveBtn.disabled = true;
       }
       if (failed.length) {
         // eslint-disable-next-line no-console
         console.error('Code Block Field: save failed for some blocks', failed);
-        window.alert(Drupal.t('Some blocks could not be saved. See the browser console for details.'));
+        window.alert(Drupal.t('Некоторые блоки не удалось сохранить. Подробности — в консоли браузера.'));
       } else {
-        setHint(Drupal.t('All changes saved.'));
+        setHint(Drupal.t('Все изменения сохранены.'));
         setTimeout(function () { setHint(''); }, 3000);
       }
     }).catch(function (err) {
       // eslint-disable-next-line no-console
       console.error('Code Block Field: save error', err);
       if (saveBtn) {
-        saveBtn.textContent = Drupal.t('Save changes');
+        saveBtn.textContent = Drupal.t('Сохранить');
         saveBtn.disabled = false;
       }
-      window.alert(Drupal.t('Save failed. See the browser console for details.'));
+      window.alert(Drupal.t('Сохранение не удалось. Подробности — в консоли браузера.'));
     });
   }
 

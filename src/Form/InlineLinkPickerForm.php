@@ -33,22 +33,22 @@ class InlineLinkPickerForm extends FormBase {
     $form['href'] = [
       '#type' => 'url',
       '#title' => $this->t('URL'),
-      '#description' => $this->t('Absolute or relative URL (e.g. <code>https://example.com</code> or <code>/about</code>).'),
+      '#description' => $this->t('Абсолютный или относительный URL (например <code>https://example.com</code> или <code>/about</code>).'),
       '#required' => FALSE,
     ];
     $form['text'] = [
       '#type' => 'textfield',
-      '#title' => $this->t('Link text'),
-      '#description' => $this->t('Visible text of the link. Leave empty to keep current.'),
+      '#title' => $this->t('Текст ссылки'),
+      '#description' => $this->t('Видимый текст ссылки. Оставьте пустым, чтобы сохранить текущий.'),
     ];
     $form['target'] = [
       '#type' => 'checkbox',
-      '#title' => $this->t('Open in new tab'),
+      '#title' => $this->t('Открывать в новой вкладке'),
     ];
     $form['rel'] = [
       '#type' => 'textfield',
-      '#title' => $this->t('Rel attribute'),
-      '#description' => $this->t('Comma-separated, e.g. <code>noopener,nofollow</code>.'),
+      '#title' => $this->t('Атрибут rel'),
+      '#description' => $this->t('Через запятую, например <code>noopener,nofollow</code>.'),
     ];
 
     $form['actions'] = [
@@ -56,7 +56,7 @@ class InlineLinkPickerForm extends FormBase {
     ];
     $form['actions']['save'] = [
       '#type' => 'submit',
-      '#value' => $this->t('Save link'),
+      '#value' => $this->t('Сохранить ссылку'),
       '#submit' => ['::submitAjax'],
       '#ajax' => [
         'callback' => '::ajaxCallback',
@@ -65,7 +65,7 @@ class InlineLinkPickerForm extends FormBase {
     ];
     $form['actions']['cancel'] = [
       '#type' => 'button',
-      '#value' => $this->t('Cancel'),
+      '#value' => $this->t('Отмена'),
       '#limit_validation_errors' => [],
       '#ajax' => ['callback' => '::cancelAjax'],
     ];

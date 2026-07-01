@@ -36,7 +36,7 @@ class InlineImagePickerForm extends FormBase {
 
     $form['fid'] = [
       '#type' => 'managed_file',
-      '#title' => $this->t('Image'),
+      '#title' => $this->t('Изображение'),
       '#upload_validators' => [
         'file_validate_extensions' => ['gif png jpg jpeg webp svg'],
         'file_validate_isImage' => [],
@@ -48,9 +48,9 @@ class InlineImagePickerForm extends FormBase {
 
     $form['alt'] = [
       '#type' => 'textfield',
-      '#title' => $this->t('Alt text'),
+      '#title' => $this->t('Alt-текст'),
       '#default_value' => $current_alt,
-      '#description' => $this->t('Used by screen readers and search engines.'),
+      '#description' => $this->t('Используется скринридерами и поисковыми системами.'),
     ];
 
     $form['actions'] = [
@@ -58,7 +58,7 @@ class InlineImagePickerForm extends FormBase {
     ];
     $form['actions']['save'] = [
       '#type' => 'submit',
-      '#value' => $this->t('Use this image'),
+      '#value' => $this->t('Использовать это изображение'),
       '#submit' => ['::submitAjax'],
       '#ajax' => [
         'callback' => '::ajaxCallback',
@@ -67,7 +67,7 @@ class InlineImagePickerForm extends FormBase {
     ];
     $form['actions']['cancel'] = [
       '#type' => 'button',
-      '#value' => $this->t('Cancel'),
+      '#value' => $this->t('Отмена'),
       '#limit_validation_errors' => [],
       '#ajax' => [
         'callback' => '::cancelAjax',

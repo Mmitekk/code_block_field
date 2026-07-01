@@ -13,10 +13,10 @@ use Drupal\Core\Url;
  * Implements hook_install().
  */
 function code_block_field_install(): void {
-  \Drupal::messenger()->addStatus(t('Code Block Field has been installed. Add a new "Code Block (HTML / CSS / JS)" field to any entity from the <a href=":fields">Field management</a> page, then assign the "Code Block editor (CodeMirror)" widget and the "Code Block (Shadow DOM, inline-editable)" formatter.', [
+  \Drupal::messenger()->addStatus(t('Модуль Code Block Field установлен. Добавьте новое поле типа «Code Block (HTML / CSS / JS)» к любой сущности со страницы <a href=":fields">управления полями</a>, затем назначьте виджет «Code Block editor (CodeMirror)» и форматтер «Code Block (Shadow DOM, inline-editable)».', [
     ':fields' => Url::fromRoute('entity.field_storage_config.collection')->toString(),
   ]));
-  \Drupal::messenger()->addStatus(t('Configure global options on the <a href=":settings">module settings page</a>.', [
+  \Drupal::messenger()->addStatus(t('Глобальные опции доступны на <a href=":settings">странице настроек модуля</a>.', [
     ':settings' => Url::fromRoute('code_block_field.settings')->toString(),
   ]));
 }
@@ -24,11 +24,11 @@ function code_block_field_install(): void {
 /**
  * Implements hook_uninstall().
  *
- * Drops the module configuration. Field storage and field data are
- * automatically removed by Drupal's field storage handler.
+ * Удаляет конфигурацию модуля. Field storage и данные поля удаляются
+ * автоматически через field storage handler Drupal.
  */
 function code_block_field_uninstall(): void {
-  // Drupal removes configuration automatically. Nothing else to clean up:
-  // file usage records are released by hook_entity_delete() when the host
-  // entity is deleted.
+  // Drupal автоматически удаляет конфигурацию. Дополнительно чистить
+  // нечего: file usage записи освобождаются через hook_entity_delete()
+  // при удалении сущности-хоста.
 }

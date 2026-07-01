@@ -40,18 +40,18 @@ function code_block_field_theme(): array {
 function code_block_field_help(string $route_name, RouteMatchInterface $route_match): string {
   switch ($route_name) {
     case 'help.page.code_block_field':
-      $output = '<h3>' . t('About') . '</h3>';
-      $output .= '<p>' . t('The Code Block Field module provides a new field type that stores an HTML / CSS / JS bundle and renders it inside an isolated Shadow DOM. The bundled content can be edited inline (text, images, links) without opening the host entity.') . '</p>';
-      $output .= '<h3>' . t('Uses') . '</h3>';
+      $output = '<h3>' . t('О модуле') . '</h3>';
+      $output .= '<p>' . t('Модуль Code Block Field добавляет новый тип поля, который хранит связку HTML / CSS / JS и рендерит её внутри изолированного Shadow DOM. Содержимое блока можно редактировать инлайн (текст, изображения, ссылки) без открытия формы сущности.') . '</p>';
+      $output .= '<h3>' . t('Использование') . '</h3>';
       $output .= '<ul>';
-      $output .= '<li>' . t('Add the field to any entity (node, paragraph, block_content, taxonomy_term, etc.).') . '</li>';
-      $output .= '<li>' . t('In the entity edit form, write your HTML / CSS / JS using the CodeMirror-powered editor.') . '</li>';
-      $output .= '<li>' . t('On the rendered page, click the floating "Edit Mode" button (visible to users with the "use code block field inline editor" permission) to edit text, images, and links in place.') . '</li>';
+      $output .= '<li>' . t('Добавьте поле к любой сущности (node, paragraph, block_content, taxonomy_term и т.д.).') . '</li>';
+      $output .= '<li>' . t('В форме редактирования сущности напишите HTML / CSS / JS в редакторе CodeMirror.') . '</li>';
+      $output .= '<li>' . t('На странице рендера нажмите плавающую кнопку «Режим редактирования» (видна пользователям с правом «use code block field inline editor»), чтобы редактировать текст, изображения и ссылки прямо на месте.') . '</li>';
       $output .= '</ul>';
       return $output;
 
     case 'code_block_field.settings':
-      return '<p>' . t('Configure the global HTML filter and storage settings for Code Block fields.') . '</p>';
+      return '<p>' . t('Глобальные настройки HTML-фильтра, хранилища файлов и инлайн-редактора для полей Code Block.') . '</p>';
   }
   return '';
 }
@@ -81,21 +81,45 @@ function code_block_field_field_widget_info_alter(array &$info): void {
  * sure asset file usage stays in sync. The actual usage registration for
  * widget-submitted values happens in CodeBlockWidget::extractFormValues().
  *
+ * Also runs the auto-asset-assignment routine: every <img> inside the
+ * field's HTML that does not have a data-cbf-asset attribute gets a unique
+ * key assigned, and if its src points to a Drupal managed file, the file
+ * is looked up and registered in the assets map (with file.usage tracking).
+ *
  * This hook fires for every entity type (including config entities such as
  * FieldStorageConfig), so we must guard against entities that do not
- * implement FieldableEntityInterface — calling getFieldDefinitions() / 
+ * implement FieldableEntityInterface — calling getFieldDefinitions() /
  * getFields() on them would throw a fatal error.
  */
 function code_block_field_entity_presave(\Drupal\Core\Entity\EntityInterface $entity): void {
   if (!$entity instanceof \Drupal\Core\Entity\FieldableEntityInterface) {
     return;
   }
+  $config = \Drupal::config('code_block_field.settings');
+  $auto_assign = (bool) $config->get('auto_assign_asset_keys');
   foreach ($entity->getFields() as $field_name => $fieldItemList) {
     $definition = $fieldItemList->getFieldDefinition();
     if ($definition->getType() !== 'code_block') {
       continue;
     }
     foreach ($fieldItemList as $delta => $item) {
+      // Auto-assign data-cbf-asset to <img> tags that don't have one.
+      if ($auto_assign && !empty($item->html)) {
+        $assets = is_array($item->assets) ? $item->assets : [];
+        $new_html = \Drupal\code_block_field\ProcessImages::process(
+          (string) $item->html,
+          $assets,
+          $entity
+        );
+        if ($new_html !== $item->html) {
+          $item->html = $new_html;
+        }
+        if ($assets !== (is_array($item->assets) ? $item->assets : [])) {
+          $item->assets = $assets;
+        }
+      }
+
+      // Register file usage for all known assets.
       $assets = is_array($item->assets) ? $item->assets : [];
       foreach ($assets as $asset) {
         $fid = $asset['fid'] ?? 0;

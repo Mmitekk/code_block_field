@@ -1,9 +1,9 @@
 name: 'Code Block Field'
 type: module
-description: 'Provides a field type with HTML/CSS/JS sub-fields and a page-builder-style inline editor. Each block is rendered inside an isolated Shadow DOM and can be edited in place (text, images, links) without opening the host entity.'
+description: 'Поле с под-полями HTML/CSS/JS и инлайн-редактором в стиле конструкторов. Каждый блок рендерится в изолированном Shadow DOM и может редактироваться прямо на странице (текст, изображения, ссылки) без открытия формы сущности.'
 package: Custom
 core_version_requirement: ^9.5 || ^10 || ^11
-version: '1.1.0'
+version: '1.2.0'
 configure: code_block_field.settings
 dependencies:
   - drupal:field
