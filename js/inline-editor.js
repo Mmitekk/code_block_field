@@ -736,46 +736,171 @@
     if (!formatToolbar || !currentEditRoot) {
       return;
     }
-    ['bold', 'italic', 'underline', 'strikeThrough'].forEach(function (cmd) {
+    // queryCommandState does not work reliably inside Shadow DOM, so we
+    // check the actual DOM ancestors of the current selection.
+    const sel = window.getSelection();
+    let node = (sel && sel.rangeCount > 0) ? sel.getRangeAt(0).commonAncestorContainer : null;
+    if (node && node.nodeType === Node.TEXT_NODE) {
+      node = node.parentNode;
+    }
+
+    const tagMap = {
+      bold: ['strong', 'b'],
+      italic: ['em', 'i'],
+      underline: ['u'],
+      strikeThrough: ['s', 'strike'],
+    };
+
+    Object.keys(tagMap).forEach(function (cmd) {
       const btn = formatToolbar.querySelector('button[data-cmd="' + cmd + '"]');
       if (!btn) {
         return;
       }
-      try {
-        if (document.queryCommandState) {
-          const active = document.queryCommandState(cmd);
-          btn.classList.toggle('is-active', active);
+      let active = false;
+      let walker = node;
+      while (walker && walker !== currentEditRoot) {
+        if (walker.nodeType === Node.ELEMENT_NODE) {
+          if (tagMap[cmd].indexOf(walker.tagName.toLowerCase()) !== -1) {
+            active = true;
+            break;
+          }
         }
-      } catch (e) {
-        // queryCommandState can throw on cross-shadow-root selections in
-        // some browsers; ignore.
+        walker = walker.parentNode;
       }
+      btn.classList.toggle('is-active', active);
     });
   }
 
   /**
-   * Runs an execCommand on the current selection inside the shadow root.
-   * execCommand is deprecated but still works in all current browsers
-   * and is the only API that operates on selections inside shadow DOM
-   * without resorting to manual Range surgery.
+   * Maps inline format commands to their HTML tag.
+   */
+  const INLINE_FORMAT_TAGS = {
+    bold: 'strong',
+    italic: 'em',
+    underline: 'u',
+    strikeThrough: 's',
+  };
+
+  /**
+   * Wraps the current selection in the given tag. Uses Range.surroundContents
+   * when possible (single-range, fully-contained selection); falls back to
+   * extractContents + wrap + insertNode when the selection crosses element
+   * boundaries (surroundContents throws on partial selections).
+   *
+   * Works inside Shadow DOM (unlike document.execCommand which is
+   * unreliable there).
+   */
+  function wrapSelectionWithTag(tagName) {
+    if (!currentEditRoot) {
+      return false;
+    }
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+      return false;
+    }
+    const range = sel.getRangeAt(0);
+
+    // If the selection is already entirely inside a tag of the same name,
+    // toggle it off (unwrap).
+    let container = range.commonAncestorContainer;
+    if (container.nodeType === Node.TEXT_NODE) {
+      container = container.parentNode;
+    }
+    if (container && container.closest) {
+      const existing = container.closest(tagName);
+      if (existing && existing.getRootNode() === currentEditRoot) {
+        // Unwrap: replace the wrapper with its children.
+        const parent = existing.parentNode;
+        while (existing.firstChild) {
+          parent.insertBefore(existing.firstChild, existing);
+        }
+        parent.removeChild(existing);
+        return true;
+      }
+    }
+
+    // Try surroundContents first — works for clean, single-element selections.
+    try {
+      const wrapper = document.createElement(tagName);
+      range.surroundContents(wrapper);
+      return true;
+    } catch (e) {
+      // surroundContents throws if the selection crosses element boundaries
+      // (e.g. user selected text spanning two <p> tags). Fall back to
+      // extractContents + wrap + insertNode.
+    }
+
+    // Fallback: extract the selection, wrap each text node in the tag,
+    // and re-insert.
+    try {
+      const fragment = range.extractContents();
+      const wrapper = document.createElement(tagName);
+      wrapper.appendChild(fragment);
+      range.insertNode(wrapper);
+      return true;
+    } catch (e2) {
+      // eslint-disable-next-line no-console
+      console.warn('wrapSelectionWithTag(' + tagName + ') failed:', e2);
+      return false;
+    }
+  }
+
+  /**
+   * Removes inline formatting (bold/italic/underline/strike) from the
+   * current selection by unwrapping the relevant tags.
+   */
+  function clearInlineFormat() {
+    if (!currentEditRoot) {
+      return;
+    }
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) {
+      return;
+    }
+    const range = sel.getRangeAt(0);
+
+    // Find all formatting tags that intersect the selection.
+    const tagsToRemove = ['strong', 'em', 'u', 's', 'b', 'i', 'span'];
+    let container = range.commonAncestorContainer;
+    if (container.nodeType === Node.TEXT_NODE) {
+      container = container.parentNode;
+    }
+    if (!container || !container.querySelectorAll) {
+      return;
+    }
+
+    tagsToRemove.forEach(function (tag) {
+      container.querySelectorAll(tag).forEach(function (el) {
+        // Only unwrap if the element is within the selection range.
+        const elRange = document.createRange();
+        elRange.selectNodeContents(el);
+        if (range.intersectsNode(el)) {
+          const parent = el.parentNode;
+          while (el.firstChild) {
+            parent.insertBefore(el.firstChild, el);
+          }
+          parent.removeChild(el);
+        }
+      });
+    });
+  }
+
+  /**
+   * Applies an inline format (bold/italic/underline/strikethrough) to the
+   * current selection. Uses surroundContents-based wrapping instead of
+   * document.execCommand (which is unreliable inside Shadow DOM).
    */
   function runFormatCommand(cmd, btn, value) {
     if (!currentEditRoot) {
       return;
     }
-    // Restore focus to the editable element so execCommand targets the
-    // right selection.
-    const sel = currentEditRoot.getSelection ? currentEditRoot.getSelection() : window.getSelection();
-    if (!sel || sel.rangeCount === 0) {
-      return;
-    }
-    // For createLink, use the existing link picker modal instead of
-    // execCommand's prompt().
+    // For createLink, use the existing link picker modal.
     if (cmd === 'createLink') {
-      const range = sel.getRangeAt(0);
-      if (!range || range.collapsed) {
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
         return;
       }
+      const range = sel.getRangeAt(0);
       // Find an existing <a> in the selection to edit, or create one.
       let a = null;
       let node = range.commonAncestorContainer;
@@ -792,7 +917,14 @@
         try {
           range.surroundContents(a);
         } catch (err) {
-          return;
+          // Selection crosses boundaries — fall back to extractContents.
+          try {
+            const fragment = range.extractContents();
+            a.appendChild(fragment);
+            range.insertNode(a);
+          } catch (err2) {
+            return;
+          }
         }
       }
       if (currentEditHost && a) {
@@ -802,9 +934,55 @@
       hideFormatToolbar();
       return;
     }
+
+    // For removeFormat, unwrap all formatting tags.
+    if (cmd === 'removeFormat') {
+      clearInlineFormat();
+      markDirty(currentEditHost);
+      updateToolbarState();
+      return;
+    }
+
+    // For foreColor, we need to wrap the selection in a <span style="color:...">.
+    if (cmd === 'foreColor' && value) {
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+        return;
+      }
+      const range = sel.getRangeAt(0);
+      try {
+        const span = document.createElement('span');
+        span.style.color = value;
+        range.surroundContents(span);
+      } catch (e) {
+        try {
+          const fragment = range.extractContents();
+          const span = document.createElement('span');
+          span.style.color = value;
+          span.appendChild(fragment);
+          range.insertNode(span);
+        } catch (e2) {
+          // eslint-disable-next-line no-console
+          console.warn('foreColor failed:', e2);
+        }
+      }
+      markDirty(currentEditHost);
+      updateToolbarState();
+      return;
+    }
+
+    // Inline formats: bold/italic/underline/strikeThrough.
+    if (INLINE_FORMAT_TAGS[cmd]) {
+      wrapSelectionWithTag(INLINE_FORMAT_TAGS[cmd]);
+      markDirty(currentEditHost);
+      updateToolbarState();
+      return;
+    }
+
+    // Alignment and lists: these are block-level and execCommand actually
+    // works for them in most browsers because they operate on the block
+    // ancestor, not the inline selection. Try execCommand as a fallback.
     try {
-      // execCommand needs focus inside the document; for shadow DOM,
-      // Chromium supports it but Firefox needs activeElement inside the root.
       document.execCommand(cmd, false, value || null);
     } catch (e) {
       // eslint-disable-next-line no-console
@@ -816,20 +994,68 @@
 
   /**
    * Converts the current block-level element of the selection to the given
-   * tag (h2/h3/h4/p). Uses document.execCommand('formatBlock', ...).
+   * tag (h2/h3/h4/p). Uses direct DOM manipulation instead of
+   * document.execCommand('formatBlock') which is unreliable inside Shadow
+   * DOM.
    */
   function runBlockCommand(tag) {
     if (!currentEditRoot) {
       return;
     }
-    try {
-      // formatBlock needs the tag name wrapped in <>. Some browsers accept
-      // the bare name too, but the angle brackets are safest.
-      document.execCommand('formatBlock', false, '<' + tag + '>');
-    } catch (e) {
-      // eslint-disable-next-line no-console
-      console.warn('formatBlock ' + tag + ' failed:', e);
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) {
+      return;
     }
+    const range = sel.getRangeAt(0);
+    let node = range.startContainer;
+    if (node.nodeType === Node.TEXT_NODE) {
+      node = node.parentNode;
+    }
+    if (!node) {
+      return;
+    }
+    // Walk up to find the nearest block-level ancestor inside the shadow root.
+    const blockTags = ['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'DIV', 'LI', 'BLOCKQUOTE'];
+    let block = node;
+    while (block && block !== currentEditRoot) {
+      if (block.nodeType === Node.ELEMENT_NODE && blockTags.indexOf(block.tagName) !== -1) {
+        break;
+      }
+      block = block.parentNode;
+    }
+    if (!block || block === currentEditRoot) {
+      // No block ancestor — fall back to execCommand.
+      try {
+        document.execCommand('formatBlock', false, '<' + tag + '>');
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.warn('formatBlock fallback failed:', e);
+      }
+      markDirty(currentEditHost);
+      updateToolbarState();
+      return;
+    }
+
+    // If the block is already the target tag, do nothing.
+    if (block.tagName.toLowerCase() === tag.toLowerCase()) {
+      return;
+    }
+
+    // Replace the block element with a new one of the target tag.
+    const newBlock = document.createElement(tag);
+    // Move all children.
+    while (block.firstChild) {
+      newBlock.appendChild(block.firstChild);
+    }
+    // Copy over class and style (often the user wants those preserved).
+    if (block.className) {
+      newBlock.className = block.className;
+    }
+    if (block.getAttribute('style')) {
+      newBlock.setAttribute('style', block.getAttribute('style'));
+    }
+    block.parentNode.replaceChild(newBlock, block);
+
     markDirty(currentEditHost);
     updateToolbarState();
   }
