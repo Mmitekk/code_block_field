@@ -28,7 +28,7 @@ class CodeBlockWidget extends WidgetBase {
   /**
    * {@inheritdoc}
    */
-  public static function defaultSettings(): array {
+  public static function defaultSettings() {
     return [
       'rows' => 14,
       'theme' => 'material-darker',
@@ -41,7 +41,7 @@ class CodeBlockWidget extends WidgetBase {
   /**
    * {@inheritdoc}
    */
-  public function settingsForm(array $form, FormStateInterface $form_state): array {
+  public function settingsForm(array $form, FormStateInterface $form_state) {
     $form = parent::settingsForm($form, $form_state);
 
     $form['rows'] = [
@@ -86,7 +86,7 @@ class CodeBlockWidget extends WidgetBase {
   /**
    * {@inheritdoc}
    */
-  public function settingsSummary(): array {
+  public function settingsSummary() {
     return [
       $this->t('Rows: @rows, Theme: @theme', [
         '@rows' => $this->getSetting('rows'),
@@ -98,7 +98,7 @@ class CodeBlockWidget extends WidgetBase {
   /**
    * {@inheritdoc}
    */
-  public function formElement(FieldItemListInterface $items, $delta, array $element, array &$form, FormStateInterface $form_state): array {
+  public function formElement(FieldItemListInterface $items, $delta, array $element, array &$form, FormStateInterface $form_state) {
     $item = $items[$delta];
 
     $element += [
@@ -243,7 +243,7 @@ class CodeBlockWidget extends WidgetBase {
    * Decodes the JSON-encoded assets map submitted by the hidden field back
    * into an array so the field type can store it.
    */
-  public function massageFormValues(array $values, array $form, FormStateInterface $form_state): array {
+  public function massageFormValues(array $values, array $form, FormStateInterface $form_state) {
     foreach ($values as $delta => $value) {
       if (!empty($values[$delta]['assets']) && is_string($values[$delta]['assets'])) {
         $decoded = json_decode($values[$delta]['assets'], TRUE);

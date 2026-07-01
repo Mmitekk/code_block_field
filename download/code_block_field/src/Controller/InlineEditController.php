@@ -60,7 +60,7 @@ class InlineEditController extends ControllerBase {
   /**
    * {@inheritdoc}
    */
-  public static function create(ContainerInterface $container): static {
+  public static function create(ContainerInterface $container) {
     $instance = parent::create($container);
     $instance->fileUsage = $container->get('file.usage');
     $instance->fileUrlGenerator = $container->get('file_url_generator');
@@ -356,7 +356,7 @@ class InlineEditController extends ControllerBase {
     if (!$allowed) {
       return $html;
     }
-    $filter = $this->filterManager()->createInstance('filter_html', [
+    $filter = \Drupal::service('plugin.manager.filter')->createInstance('filter_html', [
       'settings' => [
         'allowed_html' => $allowed,
         'filter_html_help' => FALSE,

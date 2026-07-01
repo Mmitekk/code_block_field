@@ -18,14 +18,14 @@ class InlineLinkPickerForm extends FormBase {
   /**
    * {@inheritdoc}
    */
-  public function getFormId(): string {
+  public function getFormId() {
     return 'code_block_field_inline_link_picker';
   }
 
   /**
    * {@inheritdoc}
    */
-  public function buildForm(array $form, FormStateInterface $form_state, string $entity_type = '', int $entity_id = 0, string $field_name = '', int $delta = 0, string $link_key = ''): array {
+  public function buildForm(array $form, FormStateInterface $form_state, string $entity_type = '', int $entity_id = 0, string $field_name = '', int $delta = 0, string $link_key = '') {
     $form_state->setStorage([
       'link_key' => $link_key,
     ]);
@@ -78,14 +78,14 @@ class InlineLinkPickerForm extends FormBase {
   /**
    * {@inheritdoc}
    */
-  public function submitForm(array &$form, FormStateInterface $form_state): void {
+  public function submitForm(array &$form, FormStateInterface $form_state) {
     // No-op.
   }
 
   /**
    * Ajax handler.
    */
-  public function submitAjax(array &$form, FormStateInterface $form_state): AjaxResponse {
+  public function submitAjax(array &$form, FormStateInterface $form_state) {
     $storage = $form_state->getStorage();
     $response = new AjaxResponse();
     $payload = [
@@ -103,14 +103,14 @@ class InlineLinkPickerForm extends FormBase {
   /**
    * Standard AJAX callback.
    */
-  public function ajaxCallback(array &$form, FormStateInterface $form_state): array {
+  public function ajaxCallback(array &$form, FormStateInterface $form_state) {
     return $form;
   }
 
   /**
    * Cancel.
    */
-  public function cancelAjax(array &$form, FormStateInterface $form_state): AjaxResponse {
+  public function cancelAjax(array &$form, FormStateInterface $form_state) {
     $response = new AjaxResponse();
     $response->addCommand(new CloseModalDialogCommand());
     return $response;

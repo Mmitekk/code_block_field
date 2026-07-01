@@ -33,14 +33,14 @@ class CodeBlockItem extends FieldItemBase {
   /**
    * {@inheritdoc}
    */
-  public static function mainPropertyName(): ?string {
+  public static function mainPropertyName() {
     return 'html';
   }
 
   /**
    * {@inheritdoc}
    */
-  public static function propertyDefinitions(FieldStorageDefinitionInterface $field_definition): array {
+  public static function propertyDefinitions(FieldStorageDefinitionInterface $field_definition) {
     $properties['html'] = DataDefinition::create('string')
       ->setLabel(new TranslatableMarkup('HTML'))
       ->setDescription(new TranslatableMarkup('Raw HTML markup of the block. May reference managed assets via <code>data-cbf-asset="key"</code> on &lt;img&gt; tags.'))
@@ -64,7 +64,7 @@ class CodeBlockItem extends FieldItemBase {
   /**
    * {@inheritdoc}
    */
-  public static function schema(FieldStorageDefinitionInterface $field_definition): array {
+  public static function schema(FieldStorageDefinitionInterface $field_definition) {
     return [
       'columns' => [
         'html' => [
@@ -97,7 +97,7 @@ class CodeBlockItem extends FieldItemBase {
   /**
    * {@inheritdoc}
    */
-  public function isEmpty(): bool {
+  public function isEmpty() {
     $html = $this->get('html')->getValue();
     $css = $this->get('css')->getValue();
     $js = $this->get('js')->getValue();
@@ -109,7 +109,7 @@ class CodeBlockItem extends FieldItemBase {
   /**
    * {@inheritdoc}
    */
-  public static function defaultFieldSettings(): array {
+  public static function defaultFieldSettings() {
     return [
       'allowed_html_override' => '',
       'default_mode' => 'open',
@@ -119,7 +119,7 @@ class CodeBlockItem extends FieldItemBase {
   /**
    * {@inheritdoc}
    */
-  public function fieldSettingsForm(array $form, FormStateInterface $form_state): array {
+  public function fieldSettingsForm(array $form, FormStateInterface $form_state) {
     $form = parent::fieldSettingsForm($form, $form_state);
 
     $form['allowed_html_override'] = [
