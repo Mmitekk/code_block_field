@@ -200,23 +200,14 @@ class InlineEditController extends ControllerBase {
     }
 
     $html = (string) ($payload['html'] ?? $field[$delta]->html);
-    $filtered_html = $this->filterHtml($html);
 
-    // Auto-assign data-cbf-asset to any <img> that doesn't have one.
-    // This runs before reconcileAssets so newly-tagged images get their
-    // assets map entries (with resolved fid for managed files).
-    $config = $this->config('code_block_field.settings');
-    if ((bool) $config->get('auto_assign_asset_keys') && $filtered_html !== '') {
-      $assets_for_processing = is_array($payload['assets'] ?? NULL) ? $payload['assets'] : [];
-      $filtered_html = \Drupal\code_block_field\ProcessImages::process(
-        $filtered_html,
-        $assets_for_processing,
-        $entity
-      );
-      // Merge any new auto-assets back into the payload so reconcileAssets
-      // picks them up.
-      $payload['assets'] = $assets_for_processing;
-    }
+    // IMPORTANT: As of 1.3.0, we do NOT filter the HTML or auto-assign
+    // data-cbf-asset attributes here. Both operations were causing HTML
+    // to be mangled (SVG attributes lowercased, tags self-closed, etc.)
+    // on some sites. The field now stores whatever HTML the editor sent,
+    // verbatim. File usage for known assets is still tracked via
+    // hook_entity_presave().
+    $filtered_html = $html;
 
     $field[$delta]->html = $filtered_html;
     if (array_key_exists('css', $payload)) {
@@ -237,7 +228,7 @@ class InlineEditController extends ControllerBase {
 
     // Optionally create a new revision (configurable in the module settings).
     // Only applies to entity types that actually support revisions.
-    // Note: $config already loaded above for auto_assign_asset_keys.
+    $config = $this->config('code_block_field.settings');
     $create_revision = (bool) $config->get('create_revisions');
     if ($create_revision && $entity instanceof \Drupal\Core\Entity\RevisionableInterface) {
       $log_template = $config->get('revision_log_message') ?: 'Inline edit (%date)';
@@ -421,28 +412,41 @@ class InlineEditController extends ControllerBase {
    *
    * Drops entries whose data-cbf-asset key is no longer present in the HTML,
    * keeps alt text up to date, and resolves fid references.
+   *
+   * IMPORTANT: uses a regex instead of DOMDocument. DOMDocument lowercases
+   * attribute names and self-closes empty tags, which would mangle SVG
+   * icons stored in the same HTML payload. The regex only reads attribute
+   * values from <img> tags; it does not modify the HTML.
    */
   protected function reconcileAssets(string $html, array $payload_assets, EntityInterface $entity): array {
-    $dom = new \DOMDocument();
-    libxml_use_internal_errors(TRUE);
-    $dom->loadHTML('<?xml encoding="UTF-8"?><div>' . $html . '</div>', LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
-    libxml_clear_errors();
-
     $used_keys = [];
-    foreach ($dom->getElementsByTagName('img') as $img) {
-      $key = $img->getAttribute('data-cbf-asset');
-      if ($key === '') {
-        continue;
-      }
-      $used_keys[$key] = TRUE;
-      $alt = $img->getAttribute('alt');
-      $payload_assets[$key] = $payload_assets[$key] ?? [];
-      if ($alt !== '') {
-        $payload_assets[$key]['alt'] = $alt;
-      }
-      // Promote the src into the asset record for convenience.
-      if ($src = $img->getAttribute('src')) {
-        $payload_assets[$key]['src'] = $src;
+
+    // Find every <img ... data-cbf-asset="KEY" ...> in the HTML.
+    // We use a regex to extract the key, alt and src attributes without
+    // round-tripping the HTML through DOMDocument.
+    if (preg_match_all('/<img\b[^>]*\bdata-cbf-asset\s*=\s*"([^"]+)"[^>]*>/i', $html, $img_matches, PREG_SET_ORDER)) {
+      foreach ($img_matches as $img_tag) {
+        $full_tag = $img_tag[0];
+        $key = $img_tag[1];
+        $used_keys[$key] = TRUE;
+
+        // Extract alt and src from the tag.
+        $alt = '';
+        $src = '';
+        if (preg_match('/\balt\s*=\s*"([^"]*)"/i', $full_tag, $m)) {
+          $alt = $m[1];
+        }
+        if (preg_match('/\bsrc\s*=\s*"([^"]*)"/i', $full_tag, $m)) {
+          $src = $m[1];
+        }
+
+        $payload_assets[$key] = $payload_assets[$key] ?? [];
+        if ($alt !== '') {
+          $payload_assets[$key]['alt'] = $alt;
+        }
+        if ($src) {
+          $payload_assets[$key]['src'] = $src;
+        }
       }
     }
 

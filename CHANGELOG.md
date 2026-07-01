@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] — 2026-07-01
+
+### Removed
+
+- **All HTML processing has been removed from the save pipeline.** Despite
+  five previous attempts to fix SVG-attribute stripping (1.2.2 → 1.2.6),
+  some sites still saw HTML being mangled on save. Rather than continue
+  patching, the entire HTML-processing layer has been deleted:
+
+  - `hook_entity_presave()` no longer calls `filter_html` or
+    `ProcessImages::process()`. The only thing it still does is register
+    `file.usage` for managed assets — it never touches the HTML.
+  - `InlineEditController::save()` no longer calls `filterHtml()` or
+    `ProcessImages::process()`. The HTML sent by the inline editor is
+    stored verbatim.
+  - `InlineEditController::reconcileAssets()` has been rewritten to use
+    a regex instead of `DOMDocument`. This was the last remaining
+    `DOMDocument` instance in the codebase.
+  - `CodeBlockFormatter::processAssets()` already used a regex (since
+    1.2.3) and is unchanged.
+
+  The `filter_html` and `auto_assign_asset_keys` settings still exist in
+  the config schema (so the settings form does not break) but they no
+  longer have any effect — the form fields are kept for forward
+  compatibility in case someone wants to re-enable filtering through a
+  future hook alter.
+
+- **The field now stores exactly what the author entered.** No tag
+  stripping, no attribute normalisation, no DOMDocument round-tripping
+  anywhere in the pipeline. SVG icons like
+  ```html
+  <svg viewBox="0 0 24 24" width="14" height="14" fill="none"
+       stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+       stroke-linejoin="round">
+    <polyline points="20 6 9 17 4 12"></polyline>
+  </svg>
+  ```
+  survive the save pipeline intact.
+
 ## [1.2.6] — 2026-07-01
 
 ### Changed
@@ -376,6 +415,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with installation, configuration, usage, structure, and customisation
   instructions.
 
+[1.3.0]: https://github.com/Mmitekk/code_block_field/releases/tag/1.3.0
 [1.2.6]: https://github.com/Mmitekk/code_block_field/releases/tag/1.2.6
 [1.2.5]: https://github.com/Mmitekk/code_block_field/releases/tag/1.2.5
 [1.2.4]: https://github.com/Mmitekk/code_block_field/releases/tag/1.2.4
