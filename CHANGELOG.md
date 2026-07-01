@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] — 2026-07-01
+
+### Added
+
+- **Drupal 9.5 compatibility.** The module now declares
+  `core_version_requirement: ^9.5 || ^10 || ^11` and is fully usable on
+  Drupal 9.5.x with PHP 7.4+. Updated the README/README.en compatibility
+  tables and composer.json `drupal/core` constraint accordingly.
+
+### Fixed
+
+- **Incompatible return-type declarations on overridden methods.** Several
+  overrides of `WidgetBase`, `FormatterBase`, `FieldItemBase`, `ConfigFormBase`
+  and `FormBase` methods declared strict return types (`: array`, `: string`,
+  `: void`, `: ?string`, `: AjaxResponse`, `: static`) that the parent
+  methods in Drupal core do **not** declare. PHP does not allow a subclass
+  to add a return type that the parent does not have, so this caused fatal
+  `Compile Error: Declaration of ... must be compatible with ...` errors
+  on every code path that loaded the widget, formatter or field type.
+  Removed every return-type declaration from overridden methods so the
+  signatures match Drupal core across 9.5 / 10 / 11.
+- **`Drupal\Core\Controller\ControllerBase::filterManager()` does not exist.**
+  The inline-save controller called `$this->filterManager()` which is not
+  a method of `ControllerBase` in any Drupal version (9.5 / 10 / 11).
+  Replaced with `\Drupal::service('plugin.manager.filter')` so the
+  filter_html plugin is correctly instantiated.
+
 ## [1.0.2] — 2026-07-01
 
 ### Fixed
@@ -67,6 +94,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with installation, configuration, usage, structure, and customisation
   instructions.
 
+[1.0.3]: https://github.com/Mmitekk/code_block_field/releases/tag/1.0.3
 [1.0.2]: https://github.com/Mmitekk/code_block_field/releases/tag/1.0.2
 [1.0.1]: https://github.com/Mmitekk/code_block_field/releases/tag/1.0.1
 [1.0.0]: https://github.com/Mmitekk/code_block_field/releases/tag/1.0.0

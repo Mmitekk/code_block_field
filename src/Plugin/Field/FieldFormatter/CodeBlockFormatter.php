@@ -30,7 +30,7 @@ class CodeBlockFormatter extends FormatterBase {
   /**
    * {@inheritdoc}
    */
-  public static function defaultSettings(): array {
+  public static function defaultSettings() {
     return [
       'shadow_mode' => 'open',
       'enable_inline_editing' => TRUE,
@@ -41,7 +41,7 @@ class CodeBlockFormatter extends FormatterBase {
   /**
    * {@inheritdoc}
    */
-  public function settingsForm(array $form, FormStateInterface $form_state): array {
+  public function settingsForm(array $form, FormStateInterface $form_state) {
     $form = parent::settingsForm($form, $form_state);
 
     $form['shadow_mode'] = [
@@ -76,7 +76,7 @@ class CodeBlockFormatter extends FormatterBase {
   /**
    * {@inheritdoc}
    */
-  public function settingsSummary(): array {
+  public function settingsSummary() {
     return [
       $this->t('Shadow: @mode, Inline: @inline', [
         '@mode' => $this->getSetting('shadow_mode'),
@@ -88,7 +88,7 @@ class CodeBlockFormatter extends FormatterBase {
   /**
    * {@inheritdoc}
    */
-  public function viewElements(FieldItemListInterface $items, $langcode = NULL): array {
+  public function viewElements(FieldItemListInterface $items, $langcode = NULL) {
     $elements = [];
     $entity = $items->getEntity();
     $field_name = $items->getName();

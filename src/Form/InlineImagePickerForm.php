@@ -18,14 +18,14 @@ class InlineImagePickerForm extends FormBase {
   /**
    * {@inheritdoc}
    */
-  public function getFormId(): string {
+  public function getFormId() {
     return 'code_block_field_inline_image_picker';
   }
 
   /**
    * {@inheritdoc}
    */
-  public function buildForm(array $form, FormStateInterface $form_state, string $entity_type = '', int $entity_id = 0, string $field_name = '', int $delta = 0, string $asset_key = '', int $current_fid = 0, string $current_alt = ''): array {
+  public function buildForm(array $form, FormStateInterface $form_state, string $entity_type = '', int $entity_id = 0, string $field_name = '', int $delta = 0, string $asset_key = '', int $current_fid = 0, string $current_alt = '') {
     $form_state->setStorage([
       'entity_type' => $entity_type,
       'entity_id' => $entity_id,
@@ -82,14 +82,14 @@ class InlineImagePickerForm extends FormBase {
   /**
    * {@inheritdoc}
    */
-  public function submitForm(array &$form, FormStateInterface $form_state): void {
+  public function submitForm(array &$form, FormStateInterface $form_state) {
     // No-op: handled by submitAjax().
   }
 
   /**
    * Ajax handler for the "Use this image" button.
    */
-  public function submitAjax(array &$form, FormStateInterface $form_state): AjaxResponse {
+  public function submitAjax(array &$form, FormStateInterface $form_state) {
     $storage = $form_state->getStorage();
     $fids = $form_state->getValue('fid') ?: [];
     $fid = reset($fids);
@@ -126,14 +126,14 @@ class InlineImagePickerForm extends FormBase {
   /**
    * Standard AJAX callback — returns the rebuilt form.
    */
-  public function ajaxCallback(array &$form, FormStateInterface $form_state): array {
+  public function ajaxCallback(array &$form, FormStateInterface $form_state) {
     return $form;
   }
 
   /**
    * Cancel button: just close the modal.
    */
-  public function cancelAjax(array &$form, FormStateInterface $form_state): AjaxResponse {
+  public function cancelAjax(array &$form, FormStateInterface $form_state) {
     $response = new AjaxResponse();
     $response->addCommand(new CloseModalDialogCommand());
     return $response;
@@ -142,7 +142,7 @@ class InlineImagePickerForm extends FormBase {
   /**
    * {@inheritdoc}
    */
-  public function validateForm(array &$form, FormStateInterface $form_state): void {
+  public function validateForm(array &$form, FormStateInterface $form_state) {
     parent::validateForm($form, $form_state);
   }
 

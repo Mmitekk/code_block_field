@@ -1,6 +1,6 @@
 # Code Block Field
 
-A Drupal 10 / 11 module that provides a new field type for storing an **HTML / CSS / JS bundle** in a single field. The field can be attached to any entity (node, paragraph, block_content, taxonomy_term, etc.). On the rendered page the bundle is mounted inside an **isolated Shadow DOM**, and — for users with the right permission — can be **edited inline** (text, images, links) without opening the host entity, similar to page builders like Elementor / Webflow / Bricks.
+A Drupal 9.5+ / 10+ / 11 module that provides a new field type for storing an **HTML / CSS / JS bundle** in a single field. The field can be attached to any entity (node, paragraph, block_content, taxonomy_term, etc.). On the rendered page the bundle is mounted inside an **isolated Shadow DOM**, and — for users with the right permission — can be **edited inline** (text, images, links) without opening the host entity, similar to page builders like Elementor / Webflow / Bricks.
 
 [Читать документацию на русском](./README.md)
 
@@ -19,7 +19,7 @@ A Drupal 10 / 11 module that provides a new field type for storing an **HTML / C
 - **Per-role permissions** + `update` access check on the host entity on every save
 - **File usage tracking** — every image uploaded through the inline editor is associated with the entity through `file.usage` and is released automatically when the entity is deleted
 - **HTML filtering** on every save through the core `filter_html` plugin
-- **Compatibility** — Drupal 10.x and 11.x
+- **Compatibility** — Drupal 9.5.x, 10.x and 11.x (PHP 7.4+ on 9.5, 8.1+ on 10, 8.3+ on 11)
 
 ## Installation
 
@@ -276,6 +276,7 @@ window.codeBlockFieldRegistry;
 
 | Drupal | PHP | Status |
 |--------|-----|--------|
+| 9.5.x  | 7.4+ | Fully supported |
 | 10.x   | 8.1+ | Fully supported |
 | 11.x   | 8.3+ | Fully supported |
 

@@ -27,7 +27,7 @@
     "source": "https://github.com/Mmitekk/code_block_field"
   },
   "require": {
-    "drupal/core": "^10 || ^11",
+    "drupal/core": "^9.5 || ^10 || ^11",
     "ext-dom": "*",
     "ext-json": "*"
   },
@@ -42,7 +42,7 @@
   "extra": {
     "drupal": {
       "packageName": "mmitekk/code_block_field",
-      "version": "1.0.2",
+      "version": "1.0.3",
       "security-coverage": {
         "status": "not-covered",
         "message": "Покрытие безопасности не проверяется для этого модуля / Security coverage is not checked for this module."
