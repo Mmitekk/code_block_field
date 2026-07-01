@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.6] — 2026-07-01
+
+### Changed
+
+- **HTML filtering and auto-asset-assignment are now OFF by default.**
+  Despite all the previous fixes (1.2.2 — expanded `allowed_html`,
+  1.2.3 — removed `filterHtml` from the formatter, 1.2.4 — custom
+  case-sensitive `HtmlFilter`, 1.2.5 — `ProcessImages` on regex),
+  some sites still saw HTML being mangled on save. The cause on those
+  sites is likely PHP opcode cache keeping the old code, or other
+  modules' `hook_entity_presave` implementations running after ours
+  and re-filtering the HTML.
+
+  Since `code_block_field` is a field for arbitrary HTML/CSS/JS where
+  the author is responsible for the content, any HTML processing here
+  causes more problems than it solves. Both `filter_html` and
+  `auto_assign_asset_keys` are now `false` by default in
+  `config/install/code_block_field.settings.yml`.
+
+- Added `hook_update_N()` (update 8102) that **forces** both
+  `filter_html` and `auto_assign_asset_keys` to `false` on existing
+  installations. After running `drush updb`, the field's HTML is saved
+  and rendered exactly as the author entered it — no tag stripping,
+  no attribute normalisation, no DOMDocument round-tripping anywhere
+  in the pipeline.
+
+  Users who actually want filtering can re-enable it on
+  `/admin/config/content/code-block-field`.
+
 ## [1.2.5] — 2026-07-01
 
 ### Fixed
@@ -347,6 +376,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with installation, configuration, usage, structure, and customisation
   instructions.
 
+[1.2.6]: https://github.com/Mmitekk/code_block_field/releases/tag/1.2.6
 [1.2.5]: https://github.com/Mmitekk/code_block_field/releases/tag/1.2.5
 [1.2.4]: https://github.com/Mmitekk/code_block_field/releases/tag/1.2.4
 [1.2.3]: https://github.com/Mmitekk/code_block_field/releases/tag/1.2.3
