@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.2] — 2026-07-01
+
+### Fixed
+
+- **SVG presentation attributes were stripped by the HTML filter.** The
+  default `allowed_html` list only allowed a handful of SVG attributes
+  (`viewBox`, `xmlns`, `width`, `height` on `<svg>`; `points` on
+  `<polyline>` and `<polygon>`; `d` on `<path>`; etc.). Common
+  presentation attributes like `fill`, `stroke`, `stroke-width`,
+  `stroke-linecap`, `stroke-linejoin`, `stroke-dasharray`,
+  `stroke-opacity`, `fill-opacity`, `fill-rule`, `clip-path`, `opacity`,
+  `transform` were silently dropped on save, which broke inline SVG
+  icons such as:
+  ```html
+  <svg viewBox="0 0 24 24" width="14" height="14" fill="none"
+       stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+       stroke-linejoin="round">
+    <polyline points="20 6 9 17 4 12"></polyline>
+  </svg>
+  ```
+  After this fix, the default `allowed_html` includes the full set of
+  SVG presentation attributes on every SVG element (`<svg>`, `<path>`,
+  `<circle>`, `<rect>`, `<line>`, `<polyline>`, `<polygon>`,
+  `<ellipse>`, `<g>`), plus the `<defs>`, `<clipPath>`, `<mask>`,
+  `<linearGradient>`, `<radialGradient>`, `<stop>` elements needed for
+  gradient and mask definitions. `<source>` now also allows `sizes`
+  and `type`. `<iframe>` allows `loading`. `<video>` and `<audio>`
+  allow `poster`/`preload`. `<use>` allows `xlink:href` in addition
+  to `href`.
+- Added `hook_update_N()` (update 8101) that automatically upgrades the
+  `allowed_html` setting for existing installations to the new default
+  (only if the user has not customised it — otherwise a warning
+  message is shown with instructions on how to update manually).
+
 ## [1.2.1] — 2026-07-01
 
 ### Fixed
@@ -200,6 +234,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with installation, configuration, usage, structure, and customisation
   instructions.
 
+[1.2.2]: https://github.com/Mmitekk/code_block_field/releases/tag/1.2.2
 [1.2.1]: https://github.com/Mmitekk/code_block_field/releases/tag/1.2.1
 [1.2.0]: https://github.com/Mmitekk/code_block_field/releases/tag/1.2.0
 [1.1.0]: https://github.com/Mmitekk/code_block_field/releases/tag/1.1.0
