@@ -35,6 +35,72 @@
     return shadowRoot;
   }
 
+  /**
+   * Pre-processes the user-supplied CSS so that it works correctly inside
+   * a Shadow DOM. Two transformations are applied:
+   *
+   *  1. `:root { ... }` selectors are rewritten to `:host { ... }`.
+   *     The user-authored CSS typically defines custom properties
+   *     (--blue, --accent, ...) on `:root`, which inside a shadow root
+   *     refers to the document root — outside the shadow boundary — so
+   *     the variables would be invisible. Rewriting to `:host` makes
+   *     the variables resolve to the host element of the shadow root,
+   *     which is the intended behaviour.
+   *
+   *  2. A small bridge stylesheet is prepended that uses `inherit` on
+   *     `:host` for every custom property declared on the document's
+   *     `:root`. This lets site-level variables (e.g. ones declared by
+   *     the theme) propagate into the shadow root, so authors can mix
+   *     their own variables with theme variables. Only properties that
+   *     actually exist on `document.documentElement` are bridged — no
+   *     guessing.
+   */
+  function prepareCss(css) {
+    if (!css) {
+      return css;
+    }
+    let processed = css;
+
+    // 1. Replace `:root { ... }` with `:host { ... }`. Custom properties
+    //    defined on :root in light DOM are invisible inside the shadow
+    //    root; :host is the correct selector for the host element of the
+    //    shadow root.
+    processed = processed.replace(/(^|\s|;|}):root\s*\{/g, function (m, prefix) {
+      return prefix + ':host {';
+    });
+
+    // 2. Replace `html, body` (or `body`, `html`) selectors with `:host`.
+    //    Inside a shadow root there is no <html> or <body>; using :host
+    //    applies the styles to the host element which is the closest
+    //    equivalent. We do this BEFORE the variable-bridge injection so
+    //    that user styles for body (font, color, background, etc.) apply
+    //    to the host element.
+    processed = processed.replace(/(^|\s|;|})\s*(html\s*,\s*body|body\s*,\s*html|html|body)\s*\{/g, function (m, prefix) {
+      return prefix + ' :host {';
+    });
+
+    // 3. Build a bridge of `--var: inherit;` declarations for every custom
+    //    property currently declared on document.documentElement so that
+    //    theme-level variables also resolve inside the shadow root.
+    let bridge = '';
+    try {
+      const rootStyle = window.getComputedStyle(document.documentElement);
+      for (let i = 0; i < rootStyle.length; i++) {
+        const name = rootStyle[i];
+        if (typeof name === 'string' && name.indexOf('--') === 0) {
+          bridge += '  ' + name + ': inherit;\n';
+        }
+      }
+    } catch (e) {
+      // getComputedStyle on documentElement is supported everywhere, but
+      // be defensive — if it throws, just skip the bridge.
+    }
+    if (bridge) {
+      processed = ':host {\n' + bridge + '}\n' + processed;
+    }
+    return processed;
+  }
+
   function populateShadow(host, shadowRoot, payload) {
     // Build the inner DOM.
     const wrapper = document.createElement('div');
@@ -42,7 +108,7 @@
     wrapper.innerHTML = payload.html || '';
 
     const style = document.createElement('style');
-    style.textContent = payload.css || '';
+    style.textContent = prepareCss(payload.css || '');
 
     // Reset the shadow root.
     while (shadowRoot.firstChild) {

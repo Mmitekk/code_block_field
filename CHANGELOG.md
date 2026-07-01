@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] — 2026-07-01
+
+### Fixed
+
+- **CSS variables (`var(--...)`) and `:root` selectors did not work inside
+  the Shadow DOM.** User-authored CSS typically defines custom properties
+  on `:root`, but inside a shadow root `:root` refers to the document root
+  (which is outside the shadow boundary), so the variables were invisible.
+  The renderer now pre-processes every block's CSS with a `prepareCss()`
+  function that:
+  1. Rewrites `:root { ... }` selectors to `:host { ... }` so that
+     custom properties resolve to the host element of the shadow root.
+  2. Rewrites `html`, `body`, `html, body` selectors to `:host` (there is
+     no `<html>` or `<body>` inside a shadow root — `:host` is the closest
+     equivalent).
+  3. Prepends a bridge stylesheet that sets `--var: inherit;` for every
+     custom property currently declared on `document.documentElement`,
+     so that theme-level variables also propagate into the shadow root.
+     This means blocks can mix their own variables with theme variables.
+- After this fix, blocks that use `:root { --blue: ...; }` followed by
+  `color: var(--blue)` (very common authoring pattern) render correctly.
+
 ## [1.2.0] — 2026-07-01
 
 ### Added
@@ -178,6 +200,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with installation, configuration, usage, structure, and customisation
   instructions.
 
+[1.2.1]: https://github.com/Mmitekk/code_block_field/releases/tag/1.2.1
 [1.2.0]: https://github.com/Mmitekk/code_block_field/releases/tag/1.2.0
 [1.1.0]: https://github.com/Mmitekk/code_block_field/releases/tag/1.1.0
 [1.0.3]: https://github.com/Mmitekk/code_block_field/releases/tag/1.0.3
