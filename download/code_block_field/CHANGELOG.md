@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.1] — 2026-07-01
+
+### Fixed
+
+- **Inline changes were not saved when the Code Block field is on a
+  Paragraph.** When saving a paragraph entity directly via
+  `$entity->save()`, the parent entity (node) still references the old
+  paragraph revision/content — so the inline-edited text appeared "not
+  saved" even though the paragraph was actually updated in the database.
+  After saving the entity, the controller now also saves the parent
+  entity (via `Paragraph::getParentEntity()`) so the parent's reference
+  is updated and the change becomes visible on the next page render.
+  This fixes inline saving for:
+  - Paragraphs in a `paragraphs` field on a node
+  - Paragraphs inside a Layout Builder section
+  - Any entity that implements `getParentEntity()` (Block Content,
+    Media, etc.)
+
+### Added
+
+- **Watchdog logging.** The inline-save controller now logs every save
+  operation to the `code_block_field` channel with `entity_type`,
+  `entity_id`, `field_name`, `delta`, and `html_length`. If a parent
+  entity save fails, it logs a warning. Check
+  `/admin/reports/dblog` filtered by `code_block_field` to see what's
+  happening.
+- **Better console logging in the inline editor.** Each save result is
+  logged to the browser console with the entity reference and the
+  server response. Non-JSON responses (e.g. HTML error pages from
+  access-denied or 500 errors) are now parsed and shown in the alert
+  instead of causing a silent `JSON.parse` failure. The alert message
+  now includes the actual error from the server.
+
 ## [1.3.0] — 2026-07-01
 
 ### Removed
@@ -415,6 +448,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with installation, configuration, usage, structure, and customisation
   instructions.
 
+[1.3.1]: https://github.com/Mmitekk/code_block_field/releases/tag/1.3.1
 [1.3.0]: https://github.com/Mmitekk/code_block_field/releases/tag/1.3.0
 [1.2.6]: https://github.com/Mmitekk/code_block_field/releases/tag/1.2.6
 [1.2.5]: https://github.com/Mmitekk/code_block_field/releases/tag/1.2.5
