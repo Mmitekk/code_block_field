@@ -1,0 +1,25 @@
+/**
+ * Styling for the entity-edit-form widget.
+ */
+.code-block-field-widget {
+  margin-bottom: 1em;
+}
+
+.code-block-field-widget > summary {
+  font-weight: bold;
+  padding: 0.5em 1em;
+  background: #f5f7fa;
+  border-radius: 4px 4px 0 0;
+}
+
+.code-block-field-widget .vertical-tabs {
+  margin-top: 1em;
+}
+
+.code-block-field-widget .form-item .description code {
+  background: #f3f4f6;
+  padding: 0.1em 0.35em;
+  border-radius: 3px;
+  font-family: "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 0.9em;
+}

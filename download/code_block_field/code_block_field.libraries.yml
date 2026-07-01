@@ -1,0 +1,64 @@
+# CodeMirror 5.x loaded from CDN.
+# Local fallback files can be dropped into assets/codemirror/ if CDN is unreachable.
+codemirror:
+  version: 5.65.16
+  js:
+    https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js: { type: external, minified: true, attributes: { crossorigin: anonymous } }
+    https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/xml/xml.min.js: { type: external, minified: true, attributes: { crossorigin: anonymous } }
+    https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/htmlmixed/htmlmixed.min.js: { type: external, minified: true, attributes: { crossorigin: anonymous } }
+    https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/css/css.min.js: { type: external, minified: true, attributes: { crossorigin: anonymous } }
+    https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js: { type: external, minified: true, attributes: { crossorigin: anonymous } }
+    https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closetag.min.js: { type: external, minified: true, attributes: { crossorigin: anonymous } }
+    https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js: { type: external, minified: true, attributes: { crossorigin: anonymous } }
+    https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js: { type: external, minified: true, attributes: { crossorigin: anonymous } }
+    https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.js: { type: external, minified: true, attributes: { crossorigin: anonymous } }
+    https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/html-hint.min.js: { type: external, minified: true, attributes: { crossorigin: anonymous } }
+    https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/css-hint.min.js: { type: external, minified: true, attributes: { crossorigin: anonymous } }
+    https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/javascript-hint.min.js: { type: external, minified: true, attributes: { crossorigin: anonymous } }
+    js/codemirror-init.js: { minified: false }
+  css:
+    theme:
+      https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css: { type: external, minified: true }
+      https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css: { type: external, minified: true }
+      https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.css: { type: external, minified: true }
+      css/codemirror-overrides.css: { minified: false }
+
+# Backend widget (entity edit form).
+widget:
+  version: 1.0.0
+  js:
+    js/widget.js: { minified: false }
+  css:
+    component:
+      css/widget.css: { minified: false }
+  dependencies:
+    - core/drupal
+    - core/jquery
+    - core/once
+    - code_block_field/codemirror
+
+# Client-side renderer that mounts the Shadow DOM.
+renderer:
+  version: 1.0.0
+  js:
+    js/renderer.js: { minified: false }
+  dependencies:
+    - core/drupal
+    - core/once
+
+# Inline editor (page-builder mode).
+inline_editor:
+  version: 1.0.0
+  js:
+    js/inline-editor.js: { minified: false }
+  css:
+    component:
+      css/inline-editor.css: { minified: false }
+  dependencies:
+    - core/drupal
+    - core/jquery
+    - core/once
+    - core/drupal.dialog
+    - core/drupal.dialog.ajax
+    - core/drupal.dropbutton
+    - code_block_field/renderer

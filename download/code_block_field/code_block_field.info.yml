@@ -1,0 +1,12 @@
+name: 'Code Block Field'
+type: module
+description: 'Provides a field type with HTML/CSS/JS sub-fields and an inline (page-builder style) editor for editing text, images and links in place.'
+package: Custom Fields
+core_version_requirement: ^10 || ^11
+version: 1.0.0
+configure: code_block_field.settings
+dependencies:
+  - drupal:field
+  - drupal:file
+  - drupal:filter
+  - drupal:system (>=10.0)

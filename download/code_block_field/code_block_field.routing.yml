@@ -1,0 +1,55 @@
+code_block_field.settings:
+  path: '/admin/config/content/code-block-field'
+  defaults:
+    _form: '\Drupal\code_block_field\Form\SettingsForm'
+    _title: 'Code Block Field settings'
+  requirements:
+    _permission: 'administer code block field'
+
+# Inline save endpoint — saves modified HTML back to the entity field.
+code_block_field.inline_save:
+  path: '/admin/code-block-field/inline-save'
+  defaults:
+    _controller: '\Drupal\code_block_field\Controller\InlineEditController::save'
+  methods:
+    - POST
+  requirements:
+    _custom_access: '\Drupal\code_block_field\Controller\InlineEditController::accessSave'
+  options:
+    _csrf_token: TRUE
+
+# Image upload endpoint for inline editor.
+code_block_field.image_upload:
+  path: '/admin/code-block-field/image-upload'
+  defaults:
+    _controller: '\Drupal\code_block_field\Controller\InlineEditController::uploadImage'
+  methods:
+    - POST
+  requirements:
+    _custom_access: '\Drupal\code_block_field\Controller\InlineEditController::accessUpload'
+  options:
+    _csrf_token: TRUE
+
+# Media/file picker dialog (modal) for replacing an <img> in inline mode.
+code_block_field.image_picker:
+  path: '/admin/code-block-field/image-picker/{entity_type}/{entity_id}/{field_name}/{delta}/{asset_key}'
+  defaults:
+    _controller: '\Drupal\code_block_field\Controller\InlineEditController::imagePicker'
+    _title: 'Select image'
+  requirements:
+    _custom_access: '\Drupal\code_block_field\Controller\InlineEditController::accessPicker'
+    asset_key: '[a-zA-Z0-9_\-]+'
+  options:
+    _admin_route: FALSE
+
+# Link editor dialog for editing <a href> inline.
+code_block_field.link_picker:
+  path: '/admin/code-block-field/link-picker/{entity_type}/{entity_id}/{field_name}/{delta}/{link_key}'
+  defaults:
+    _controller: '\Drupal\code_block_field\Controller\InlineEditController::linkPicker'
+    _title: 'Edit link'
+  requirements:
+    _custom_access: '\Drupal\code_block_field\Controller\InlineEditController::accessPicker'
+    link_key: '[a-zA-Z0-9_\-]+'
+  options:
+    _admin_route: FALSE

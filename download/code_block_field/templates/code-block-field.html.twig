@@ -1,0 +1,38 @@
+{#
+  Default template for the code_block field formatter.
+  The wrapper div is the Shadow DOM host. The actual HTML/CSS/JS is rendered
+  into the Shadow DOM by js/renderer.js on the client side; we only emit the
+  raw data here (escaped JSON in <script type="application/json">) so that
+  nothing leaks into the host document.
+#}
+{%
+  set classes = [
+    'cbf-host',
+    'cbf-host--' ~ shadow_mode,
+    inline_enabled ? 'cbf-host--inline-enabled' : 'cbf-host--inline-disabled',
+  ]
+%}
+<div{{ attributes.addClass(classes) }}
+  data-cbf-instance="{{ instance_id }}"
+  data-cbf-entity-type="{{ entity_type }}"
+  data-cbf-entity-id="{{ entity_id }}"
+  data-cbf-field-name="{{ field_name }}"
+  data-cbf-delta="{{ delta }}"
+  data-cbf-langcode="{{ langcode }}"
+  data-cbf-shadow-mode="{{ shadow_mode }}">
+  <script type="application/json" class="cbf-payload">
+    {{ {
+      'html': html,
+      'css': css,
+      'js': js,
+    }|json_encode|raw }}
+  </script>
+  <noscript>
+    <div class="cbf-noscript">
+      {{ html|raw }}
+      {% if css %}
+        <style>{{ css|raw }}</style>
+      {% endif %}
+    </div>
+  </noscript>
+</div>

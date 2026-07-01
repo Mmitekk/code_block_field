@@ -1,0 +1,133 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * @file
+ * Primary module hooks for Code Block Field.
+ */
+
+use Drupal\Core\Routing\RouteMatchInterface;
+
+/**
+ * Implements hook_theme().
+ */
+function code_block_field_theme(): array {
+  return [
+    'code_block_field' => [
+      'variables' => [
+        'instance_id' => '',
+        'html' => '',
+        'css' => '',
+        'js' => '',
+        'entity_type' => '',
+        'entity_id' => NULL,
+        'field_name' => '',
+        'delta' => 0,
+        'langcode' => '',
+        'shadow_mode' => 'open',
+        'inline_enabled' => FALSE,
+        'attributes' => [],
+      ],
+      'template' => 'code-block-field',
+    ],
+  ];
+}
+
+/**
+ * Implements hook_help().
+ */
+function code_block_field_help(string $route_name, RouteMatchInterface $route_match): string {
+  switch ($route_name) {
+    case 'help.page.code_block_field':
+      $output = '<h3>' . t('About') . '</h3>';
+      $output .= '<p>' . t('The Code Block Field module provides a new field type that stores an HTML / CSS / JS bundle and renders it inside an isolated Shadow DOM. The bundled content can be edited inline (text, images, links) without opening the host entity.') . '</p>';
+      $output .= '<h3>' . t('Uses') . '</h3>';
+      $output .= '<ul>';
+      $output .= '<li>' . t('Add the field to any entity (node, paragraph, block_content, taxonomy_term, etc.).') . '</li>';
+      $output .= '<li>' . t('In the entity edit form, write your HTML / CSS / JS using the CodeMirror-powered editor.') . '</li>';
+      $output .= '<li>' . t('On the rendered page, click the floating "Edit Mode" button (visible to users with the "use code block field inline editor" permission) to edit text, images, and links in place.') . '</li>';
+      $output .= '</ul>';
+      return $output;
+
+    case 'code_block_field.settings':
+      return '<p>' . t('Configure the global HTML filter and storage settings for Code Block fields.') . '</p>';
+  }
+  return '';
+}
+
+/**
+ * Implements hook_element_info_alter().
+ *
+ * Ensures the vertical_tabs element used by our widget has the right
+ * defaults even on entities that don't normally use them.
+ */
+function code_block_field_element_info_alter(array &$types): void {
+  // Intentionally empty placeholder — kept for future hooks.
+}
+
+/**
+ * Implements hook_field_widget_info_alter().
+ *
+ * No-op for now; kept so other modules can decorate our widget if needed.
+ */
+function code_block_field_field_widget_info_alter(array &$info): void {
+}
+
+/**
+ * Implements hook_entity_presave().
+ *
+ * For host entities that don't run our widget (e.g. inline-saved ones), make
+ * sure asset file usage stays in sync. The actual usage registration for
+ * widget-submitted values happens in CodeBlockWidget::extractFormValues().
+ */
+function code_block_field_entity_presave(\Drupal\Core\Entity\EntityInterface $entity): void {
+  if (!$entity->getFieldDefinitions()) {
+    return;
+  }
+  foreach ($entity->getFields() as $field_name => $fieldItemList) {
+    $definition = $fieldItemList->getFieldDefinition();
+    if ($definition->getType() !== 'code_block') {
+      continue;
+    }
+    foreach ($fieldItemList as $delta => $item) {
+      $assets = is_array($item->assets) ? $item->assets : [];
+      foreach ($assets as $asset) {
+        $fid = $asset['fid'] ?? 0;
+        if (!$fid) {
+          continue;
+        }
+        $file = \Drupal::entityTypeManager()->getStorage('file')->load($fid);
+        if ($file) {
+          \Drupal::service('file.usage')->add($file, 'code_block_field', $entity->getEntityTypeId(), (int) ($entity->id() ?: 0));
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_entity_delete().
+ *
+ * Releases file usage for all code_block assets attached to the entity.
+ */
+function code_block_field_entity_delete(\Drupal\Core\Entity\EntityInterface $entity): void {
+  foreach ($entity->getFields() as $fieldItemList) {
+    if ($fieldItemList->getFieldDefinition()->getType() !== 'code_block') {
+      continue;
+    }
+    foreach ($fieldItemList as $item) {
+      $assets = is_array($item->assets) ? $item->assets : [];
+      foreach ($assets as $asset) {
+        $fid = $asset['fid'] ?? 0;
+        if (!$fid) {
+          continue;
+        }
+        $file = \Drupal::entityTypeManager()->getStorage('file')->load($fid);
+        if ($file) {
+          \Drupal::service('file.usage')->delete($file, 'code_block_field', $entity->getEntityTypeId(), (int) $entity->id(), 0);
+        }
+      }
+    }
+  }
+}

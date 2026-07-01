@@ -1,0 +1,31 @@
+/**
+ * CodeMirror visual overrides inside Drupal.
+ */
+.CodeMirror {
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-family: "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  min-height: 240px;
+  width: 100%;
+}
+
+.CodeMirror.CodeMirror-focused {
+  border-color: #0071eb;
+  box-shadow: 0 0 0 2px rgba(0, 113, 235, 0.25);
+}
+
+/* Make CodeMirror fill the vertical-tabs panel. */
+.code-block-field-widget .vertical-tabs__pane {
+  padding: 1em;
+}
+
+.code-block-asset-browser table {
+  margin-top: 0.75em;
+}
+
+.code-block-asset-browser img {
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
