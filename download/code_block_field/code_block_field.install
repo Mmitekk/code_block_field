@@ -70,3 +70,32 @@ function code_block_field_update_8101(): void {
     \Drupal::messenger()->addWarning(t('Внимание: в Code Block Field расширена поддержка SVG (fill, stroke, stroke-width и др.). Ваш список разрешённых HTML-тегов был изменён вручную, поэтому автоматического обновления не произошло. Если SVG-атрибуты срезаются при сохранении — добавьте их в allowed_html на странице /admin/config/content/code-block-field. Подробности в CHANGELOG.md, версия 1.2.2.'));
   }
 }
+
+/**
+ * Update 8102: полностью отключаем любую обработку HTML по умолчанию.
+ *
+ * Несмотря на все предыдущие фиксы (1.2.2 — расширенный allowed_html,
+ * 1.2.3 — убран filterHtml из форматтера, 1.2.4 — собственный
+ * case-sensitive HtmlFilter, 1.2.5 — ProcessImages на regex), на
+ * некоторых сайтах HTML всё равно обрезается при сохранении.
+ * Причины могут быть разные: opcode cache PHP, кэш Drupal, сторонние
+ * модули (Paragraphs, layout_builder) со своими hook_entity_presave,
+ * которые запускаются после нашего, и т.д.
+ *
+ * Поскольку code_block_field — это поле для произвольного HTML/CSS/JS,
+ * автор которого сам отвечает за содержимое, любая обработка HTML здесь
+ * приносит больше проблем, чем пользы. По умолчанию отключаем и
+ * фильтрацию, и авто-присвоение data-cbf-asset — теперь HTML сохраняется
+ * и рендерится ровно в том виде, в котором автор его ввёл.
+ *
+ * Пользователь может включить эти опции обратно на
+ * /admin/config/content/code-block-field.
+ */
+function code_block_field_update_8102(): void {
+  $config = \Drupal::configFactory()->getEditable('code_block_field.settings');
+  $config
+    ->set('filter_html', FALSE)
+    ->set('auto_assign_asset_keys', FALSE)
+    ->save();
+  \Drupal::messenger()->addStatus(t('HTML-фильтрация и авто-присвоение data-cbf-asset в Code Block Field отключены по умолчанию. Содержимое поля теперь сохраняется и рендерится как есть, без какой-либо обработки. Если нужно включить эти опции — это можно сделать на странице /admin/config/content/code-block-field.'));
+}
