@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.3] — 2026-07-01
+
+### Fixed
+
+- **WYSIWYG formatting still did not apply (1.3.2 was not enough).**
+  Root cause: when the user clicks a button on the floating format
+  toolbar, the browser moves focus to the button, which **collapses
+  the selection** inside the shadow root. By the time `wrapSelectionWithTag`
+  or `runFormatCommand` reads `window.getSelection()`, the selection is
+  gone — so `surroundContents()` has nothing to wrap and silently does
+  nothing. The HTML is saved without any formatting.
+
+  Fix: the toolbar now **saves the selection Range** when it first
+  appears (in `showFormatToolbar()`) and **restores it** before every
+  format command (via a new `restoreSelection()` helper). This ensures
+  that `window.getSelection()` always returns the user's original
+  selection, even after the toolbar button has received focus.
+
+  The `restoreSelection()` call is added at the top of:
+  - `runFormatCommand()` (covers bold/italic/underline/strike/link/
+    color/clear)
+  - `wrapSelectionWithTag()` (double safety)
+  - `clearInlineFormat()`
+  - `runBlockCommand()` (H2/H3/H4/paragraph)
+
+### Added
+
+- **Console logging for WYSIWYG debugging.** When the user clicks a
+  format button, the console now logs:
+  - `Code Block Field: format button clicked { cmd: 'bold', hasSavedRange: true, savedRangeCollapsed: false }`
+  - `Code Block Field: wrapped selection in <strong> via surroundContents`
+  (or `via extractContents fallback`, or `unwrapped <strong>` on toggle-off)
+  
+  If formatting still doesn't work, check the browser console — these
+  messages will show exactly where the pipeline breaks.
+
 ## [1.3.2] — 2026-07-01
 
 ### Fixed
@@ -491,6 +527,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with installation, configuration, usage, structure, and customisation
   instructions.
 
+[1.3.3]: https://github.com/Mmitekk/code_block_field/releases/tag/1.3.3
 [1.3.2]: https://github.com/Mmitekk/code_block_field/releases/tag/1.3.2
 [1.3.1]: https://github.com/Mmitekk/code_block_field/releases/tag/1.3.1
 [1.3.0]: https://github.com/Mmitekk/code_block_field/releases/tag/1.3.0

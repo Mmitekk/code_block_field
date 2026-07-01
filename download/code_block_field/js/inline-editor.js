@@ -617,6 +617,10 @@
   let formatToolbar = null;
   let currentEditHost = null;        // the .cbf-host that owns the current selection
   let currentEditRoot = null;        // the shadow root of that host
+  let savedRange = null;             // saved Range from the selection, used to
+                                     // restore the selection before applying
+                                     // a format command (otherwise the
+                                     // toolbar button click collapses it)
 
   function buildFormatToolbar() {
     if (formatToolbar) {
@@ -667,6 +671,12 @@
       btn.addEventListener('click', function (e) {
         e.preventDefault();
         const cmd = btn.getAttribute('data-cmd');
+        // eslint-disable-next-line no-console
+        console.log('Code Block Field: format button clicked', {
+          cmd: cmd,
+          hasSavedRange: !!savedRange,
+          savedRangeCollapsed: savedRange ? savedRange.collapsed : null,
+        });
         runFormatCommand(cmd, btn);
       });
     });
@@ -706,6 +716,10 @@
       hideFormatToolbar();
       return;
     }
+    // Save the range so we can restore the selection when the user
+    // clicks a toolbar button (the click would otherwise move focus
+    // to the button and collapse the selection inside the shadow root).
+    savedRange = range.cloneRange();
     formatToolbar.style.display = 'flex';
     const toolbarRect = formatToolbar.getBoundingClientRect();
     let top = rect.top - toolbarRect.height - 6;
@@ -730,6 +744,34 @@
     }
     currentEditHost = null;
     currentEditRoot = null;
+    savedRange = null;
+  }
+
+  /**
+   * Restores the saved selection range inside the shadow root. This is
+   * called before every format command because clicking a toolbar button
+   * moves focus to the button and collapses the selection inside the
+   * shadow root.
+   *
+   * Returns true if the selection was restored successfully.
+   */
+  function restoreSelection() {
+    if (!savedRange || !currentEditRoot) {
+      return false;
+    }
+    const sel = window.getSelection();
+    if (!sel) {
+      return false;
+    }
+    sel.removeAllRanges();
+    try {
+      sel.addRange(savedRange);
+      return true;
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn('Code Block Field: failed to restore selection:', e);
+      return false;
+    }
   }
 
   function updateToolbarState() {
@@ -794,8 +836,13 @@
     if (!currentEditRoot) {
       return false;
     }
+    // Restore the saved selection — the toolbar button click may have
+    // collapsed it.
+    restoreSelection();
     const sel = window.getSelection();
     if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+      // eslint-disable-next-line no-console
+      console.warn('Code Block Field: wrapSelectionWithTag(' + tagName + ') — no selection');
       return false;
     }
     const range = sel.getRangeAt(0);
@@ -815,6 +862,8 @@
           parent.insertBefore(existing.firstChild, existing);
         }
         parent.removeChild(existing);
+        // eslint-disable-next-line no-console
+        console.log('Code Block Field: unwrapped <' + tagName + '>');
         return true;
       }
     }
@@ -823,6 +872,8 @@
     try {
       const wrapper = document.createElement(tagName);
       range.surroundContents(wrapper);
+      // eslint-disable-next-line no-console
+      console.log('Code Block Field: wrapped selection in <' + tagName + '> via surroundContents');
       return true;
     } catch (e) {
       // surroundContents throws if the selection crosses element boundaries
@@ -837,6 +888,8 @@
       const wrapper = document.createElement(tagName);
       wrapper.appendChild(fragment);
       range.insertNode(wrapper);
+      // eslint-disable-next-line no-console
+      console.log('Code Block Field: wrapped selection in <' + tagName + '> via extractContents fallback');
       return true;
     } catch (e2) {
       // eslint-disable-next-line no-console
@@ -853,6 +906,7 @@
     if (!currentEditRoot) {
       return;
     }
+    restoreSelection();
     const sel = window.getSelection();
     if (!sel || sel.rangeCount === 0) {
       return;
@@ -894,6 +948,10 @@
     if (!currentEditRoot) {
       return;
     }
+    // Restore the saved selection — the toolbar button click may have
+    // collapsed it. This is essential for all format commands to work.
+    restoreSelection();
+
     // For createLink, use the existing link picker modal.
     if (cmd === 'createLink') {
       const sel = window.getSelection();
@@ -1002,6 +1060,7 @@
     if (!currentEditRoot) {
       return;
     }
+    restoreSelection();
     const sel = window.getSelection();
     if (!sel || sel.rangeCount === 0) {
       return;
