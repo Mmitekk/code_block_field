@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.5] — 2026-07-01
+
+### Fixed
+
+- **SVG attributes were STILL being stripped on save even after 1.2.4.**
+  Root cause: `ProcessImages::process()` (used by `hook_entity_presave`
+  when `auto_assign_asset_keys` is enabled) was round-tripping the entire
+  HTML through `DOMDocument` to find `<img>` tags and add `data-cbf-asset`
+  attributes. DOMDocument:
+  - Lowercases attribute names (`viewBox` → `viewbox`)
+  - Self-closes empty tags (`<polyline></polyline>` → `<polyline />`)
+  - Drops attributes it does not understand
+
+  So even though our new `HtmlFilter` (introduced in 1.2.4) preserves
+  attribute case, by the time it ran the HTML had already been mangled
+  by `ProcessImages`.
+
+- **Rewrote `ProcessImages::process()` to use a regex instead of
+  DOMDocument.** The new implementation uses `preg_replace_callback` to
+  patch only the `<img>` tags that need a `data-cbf-asset` attribute,
+  leaving the rest of the HTML (including `<svg>`, `<polyline>`, etc.)
+  completely untouched.
+
+- After this fix, SVG icons like
+  ```html
+  <svg viewBox="0 0 24 24" width="14" height="14" fill="none"
+       stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+       stroke-linejoin="round">
+    <polyline points="20 6 9 17 4 12"></polyline>
+  </svg>
+  ```
+  survive the save pipeline intact.
+
 ## [1.2.4] — 2026-07-01
 
 ### Fixed
@@ -314,6 +347,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with installation, configuration, usage, structure, and customisation
   instructions.
 
+[1.2.5]: https://github.com/Mmitekk/code_block_field/releases/tag/1.2.5
 [1.2.4]: https://github.com/Mmitekk/code_block_field/releases/tag/1.2.4
 [1.2.3]: https://github.com/Mmitekk/code_block_field/releases/tag/1.2.3
 [1.2.2]: https://github.com/Mmitekk/code_block_field/releases/tag/1.2.2
