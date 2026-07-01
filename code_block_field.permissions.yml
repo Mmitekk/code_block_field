@@ -1,11 +1,11 @@
 'use code block field inline editor':
   title: 'Use inline editor for Code Block fields'
-  description: 'Allows editing HTML/CSS/JS content of Code Block fields directly on the page without opening the entity edit form. Includes uploading images and editing links.'
+  description: 'Allows editing HTML/CSS/JS content of Code Block fields directly on the page without opening the entity edit form. Includes uploading images and editing links. The user must also have "update" access on the host entity.'
   restrict access: true
 
 'administer code block field':
   title: 'Administer Code Block Field settings'
-  description: 'Configure global settings for Code Block Field module (filter settings, default editor, etc.).'
+  description: 'Configure global settings for Code Block Field module (filter settings, default editor, upload location, colours).'
   restrict access: true
 
 'edit code block html directly':

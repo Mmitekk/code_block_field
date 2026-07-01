@@ -1,176 +1,294 @@
 # Code Block Field
 
-A Drupal 10/11 module that provides a new **field type** for storing an
-**HTML / CSS / JS bundle** as a single field. The field can be attached to any
-entity (node, paragraph, block_content, taxonomy_term, …). On the rendered
-page the bundle is mounted inside an **isolated Shadow DOM**, and — for users
-with the right permission — can be **edited inline** (text, images, links)
-without opening the host entity, similar to page builders like Elementor or
-Webflow.
+Модуль для Drupal 10 / 11, добавляющий новый тип поля для хранения связки **HTML / CSS / JS** в одном поле. Поле можно добавить к любой сущности (node, paragraph, block_content, taxonomy_term и т.д.). На странице блок рендерится внутри **изолированного Shadow DOM**, а пользователи с соответствующими правами могут редактировать его содержимое прямо на странице (текст, изображения, ссылки) — без необходимости открывать сущность на редактирование, как в визуальных конструкторах (Elementor / Webflow / Bricks).
 
-## Features
+[Read this documentation in English](./README.en.md)
 
-- New field type `code_block` with sub-fields **HTML**, **CSS**, **JS** and a
-  serialised `assets` map (managed files referenced by the HTML).
-- Widget backed by **CodeMirror** (HTML / CSS / JS modes, autocomplete, tag
-  auto-close) served from CDN.
-- Formatter renders each block inside an **open or closed Shadow DOM** so the
-  block’s CSS never leaks into the host theme.
-- **Inline editor**:
-  - Floating toolbar with **Edit mode** toggle, **Save changes**, **Cancel**.
-  - `contenteditable` for every text-bearing element (headings, paragraphs,
-    spans, list items, table cells, …).
-  - Click any `<img data-cbf-asset="key">` to replace it through a Drupal
-    modal **file picker** (managed files, with alt-text editing).
-  - Double-click (or click the pencil handle on) any `<a>` to edit its
-    `href`, target, `rel`, and visible text through a modal form.
-  - Dirty tracking: only blocks with actual changes are saved.
-  - All saves go through a CSRF-protected JSON endpoint and run the same
-    HTML filter that the entity form would run.
-- Per-role + per-entity permission model: the `use code block field inline
-  editor` permission is required **and** the user must also have `update`
-  access on the host entity.
-- Configurable HTML filter (powered by the core `filter_html` plugin) and
-  configurable upload destination / max filesize.
-- File usage tracking: managed files referenced from the HTML are tracked
-  with `file.usage` so they are not garbage-collected and are released
-  automatically when the entity is deleted.
+## Возможности
 
-## Installation
+- **Новый тип поля `code_block`** с под-полями **HTML**, **CSS**, **JS** и сериализованной картой **assets** (managed files)
+- **Рендер в Shadow DOM** — CSS блока не конфликтует с темой и наоборот. Поддерживаются режимы `open` и `closed`
+- **Inline-редактор в стиле конструкторов:**
+  - Плавающая панель в правом верхнем углу с кнопками **«Edit mode»**, **«Save changes»**, **«Cancel»**
+  - `contenteditable` для всех текстовых элементов (h1–h6, p, span, a, li, td, figcaption, blockquote, strong, em, b, i, …)
+  - Клик по `<img data-cbf-asset="key">` → модальный Drupal file-picker с загрузкой и редактированием alt
+  - Двойной клик по `<a>` (или по карандашу ✎) → модальная форма редактирования `href`, `target`, `rel`, текста ссылки
+  - Отслеживание «грязных» блоков (dirty tracking) и CSRF-защищённый JSON endpoint для сохранения
+- **Редактор кода CodeMirror 5** в форме сущности — режимы HTML / CSS / JS, автодополнение, автозакрытие тегов, темы (Material Darker / Dracula / Nord / Monokai / Default)
+- **Глобальная страница настроек** в админке (как у FAQ by URL): HTML-фильтр, путь загрузки, макс. размер, режим Shadow DOM, цвета инлайн-редактора
+- **Per-role permissions** + проверка права `update` на сущности при каждом сохранении
+- **File usage tracking** — все картинки, загруженные через инлайн-редактор, привязываются к сущности через `file.usage` и автоматически освобождаются при удалении сущности
+- **HTML-фильтрация** на каждом сохранении через ядрный `filter_html`
+- **Совместимость** — Drupal 10.x и 11.x
 
-1. Copy the `code_block_field/` directory into your project’s
-   `web/modules/custom/` directory (or wherever your site’s contrib/custom
-   modules live).
-2. Enable the module:
+## Установка
+
+### Вариант 1: Через Composer (рекомендуется)
+
+Composer автоматически скачает модуль в нужную директорию и будет управлять обновлениями.
+
+1. Добавьте репозиторий модуля в `composer.json` вашего проекта:
+   ```bash
+   composer config repositories.code_block_field vcs https://github.com/Mmitekk/code_block_field.git
+   ```
+
+2. Установите модуль:
+   ```bash
+   composer require mmitekk/code_block_field:dev-main
+   ```
+   Модуль будет установлен в `web/modules/custom/code_block_field/` (путь зависит от структуры вашего проекта).
+
+3. Включите модуль через Drush или админку:
    ```bash
    drush en code_block_field -y
    ```
-   or via *Extend* (`/admin/modules`).
-3. Visit **Configuration → Content authoring → Code Block Field**
-   (`/admin/config/content/code-block-field`) to review the defaults:
-   - Allowed HTML tags (used by `filter_html` on every save).
-   - Upload destination (defaults to `public://code-block-field`).
-   - Maximum upload size (defaults to 5 MB).
-   - Shadow DOM mode (open / closed).
-4. Add a new field of type **Code Block (HTML / CSS / JS)** to any entity
-   (node, paragraph, block_content, …).
-5. On the field’s **Manage form display** tab, choose the
-   **Code Block editor (CodeMirror)** widget.
-6. On the **Manage display** tab, choose the
-   **Code Block (Shadow DOM, inline-editable)** formatter and (optionally)
-   configure the formatter’s Shadow DOM mode and the image style applied to
-   managed assets.
 
-## Usage
+4. Модуль автоматически создаст файл конфигурации `code_block_field.settings.yml` с настройками по умолчанию.
 
-### Authoring a block
+**Обновление через Composer:**
+```bash
+composer update mmitekk/code_block_field
+drush updb -y
+drush cr
+```
 
-1. Open the host entity (node / paragraph / block / term) for editing.
-2. In the **Code Block** field widget, write the **HTML**, **CSS**, and
-   **JS** for your block.
-3. To mark an image as a managed asset, use
-   `<img data-cbf-asset="my-key" src="…" alt="…">` in the HTML. The first
-   time you save the entity the asset map is rebuilt and the file is
-   associated with the entity through Drupal’s file-usage system.
-4. Save the entity.
+**Переключение на стабильный релиз** (когда появятся теги):
+```bash
+composer require mmitekk/code_block_field:^1.0
+```
 
-### Editing a block inline
+> **Примечание:** если Composer устанавливает модуль не в `web/modules/custom/`, а в другую директорию — добавьте в `composer.json` проекта секцию `installer-paths`:
+> ```json
+> "extra": {
+>     "installer-paths": {
+>         "web/modules/custom/{$name}": ["type:drupal-custom-module"]
+>     }
+> }
+> ```
 
-1. View the rendered page (any display that uses the
-   **Code Block (Shadow DOM, inline-editable)** formatter).
-2. If you have the `use code block field inline editor` permission and
-   `update` access to the entity, a floating **Code Block** toolbar appears
-   in the top-right corner.
-3. Click **Edit mode** — every code block on the page gets a dashed outline
-   and its text becomes editable in place. Images show a **Replace** badge;
-   links get a small ✎ handle.
-4. Edit text by clicking it. Replace an image by clicking on it (a modal
-   file picker opens). Edit a link by double-clicking it (or clicking the ✎
-   handle).
-5. Click **Save changes** in the toolbar — every dirty block is POSTed to
-   `/admin/code-block-field/inline-save` and saved back into the host
-   entity’s field. The page is **not** reloaded; the Shadow DOM keeps the
-   new content.
-6. Click **Cancel** to discard all unsaved changes and exit edit mode.
+### Вариант 2: Вручную
 
-## How isolation works
+1. Скачайте архив с GitHub: https://github.com/Mmitekk/code_block_field/archive/refs/heads/main.zip
+2. Распакуйте и переименуйте папку в `code_block_field`
+3. Скопируйте папку `code_block_field` в директорию `web/modules/custom/` вашего Drupal-сайта
+4. Включите модуль через админку (`/admin/modules`) или Drush:
+   ```bash
+   drush en code_block_field -y
+   ```
+5. Модуль автоматически создаст конфигурацию по умолчанию
 
-Each block is rendered into its own Shadow DOM root by `js/renderer.js`.
-This means:
+## Настройка
 
-- The block’s CSS **cannot** leak into the host theme, and the host theme’s
-  CSS **cannot** leak into the block.
-- The block’s JavaScript runs in the global page scope (Shadow DOM does not
-  isolate JS, only DOM/CSS). Inside the block’s script, the variables
-  `host` (the host element) and `shadowRoot` (its shadow root) are bound.
-  Use `shadowRoot.querySelector(...)` to access the block’s own DOM.
+### Шаг 1. Добавьте поле к сущности
 
-For tighter JS isolation, choose **closed** Shadow DOM mode — external
-scripts will not be able to reach into the block through
-`element.shadowRoot`. The inline editor still works because it captures a
-direct reference to the shadow root when the block is first mounted.
+1. Откройте **Структура → Типы материалов → [ваш тип] → Управление полями** (или любую другую сущность: paragraph, block_content, taxonomy_term)
+2. Нажмите **«Добавить поле»** → выберите тип **Code Block (HTML / CSS / JS)**
+3. Задайте имя поля (например, `field_code_block`)
 
-## Permissions
+### Шаг 2. Настройте форму и дисплей
 
-| Permission | Description |
-|------------|-------------|
-| `use code block field inline editor` | Required to see the floating toolbar and to call the inline-save / image-upload endpoints. |
-| `administer code block field` | Required to access the global settings form. |
-| `edit code block html directly` | Optional — when denied, the user can only modify the field through the inline editor (the HTML textarea in the entity form is read-only). This is enforced in the widget; not yet wired in the default widget — see `code_block_field_field_widget_form_alter()` if you want to enforce it. |
+1. В **Управление формой** выберите виджет **Code Block editor (CodeMirror)**
+2. В **Управлении отображением** выберите форматтер **Code Block (Shadow DOM, inline-editable)**
+3. У форматтера доступны собственные настройки:
+   - **Shadow DOM mode** — `open` / `closed`
+   - **Enable inline editing on this display** — включает/выключает inline-редактор для этого display mode
+   - **Image style for managed assets** — какой image style применять к загруженным картинкам
 
-Additionally, the inline editor always checks `update` access on the host
-entity before allowing any change.
+### Шаг 3. Настройте права доступа
 
-## Endpoints
+На странице **People → Permissions** (`/admin/people/permissions`):
 
-| Method | Path | Purpose |
-|--------|------|---------|
-| POST | `/admin/code-block-field/inline-save` | Saves the modified HTML of one field item. CSRF-protected. |
-| POST | `/admin/code-block-field/image-upload` | Used internally by the modal image picker (when called from the inline editor outside the entity form). CSRF-protected. |
-| GET  | `/admin/code-block-field/image-picker/{entity_type}/{entity_id}/{field_name}/{delta}/{asset_key}` | Modal form for picking an image. |
-| GET  | `/admin/code-block-field/link-picker/{entity_type}/{entity_id}/{field_name}/{delta}/{link_key}` | Modal form for editing a link. |
+| Право | Описание |
+|-------|----------|
+| **Use inline editor for Code Block fields** | Доступ к инлайн-редактору и endpoint сохранения. Дополнительно пользователь должен иметь `update` на сущности |
+| **Administer Code Block Field settings** | Доступ к глобальной странице настроек модуля |
+| **Edit raw HTML in Code Block fields** | Доступ к редактированию HTML-кода в форме сущности (можно отключить для контент-менеджеров, оставив только inline-редактор) |
 
-## Theming
+### Шаг 4. Глобальные настройки модуля
 
-The default template `templates/code-block-field.html.twig` emits a single
-`.cbf-host` div with the field’s metadata as `data-*` attributes and the
-HTML / CSS / JS payload as an embedded `<script type="application/json">`.
-You can override this template in your theme (`code-block-field.html.twig`).
+Перейдите в **Конфигурация → Контент → Code Block Field** (`/admin/config/content/code-block-field`):
 
-The visual chrome of the inline editor lives in
-`css/inline-editor.css` (host-document styles) and in a `<style>` tag
-injected into each shadow root when edit mode is enabled
-(`js/inline-editor.js`, `SHADOW_EDIT_STYLES`).
+#### HTML-фильтр
 
-## Programmatic API
+| Параметр | Описание | По умолчанию |
+|----------|----------|--------------|
+| **Filter HTML on save** | Включает фильтрацию HTML через `filter_html` при каждом сохранении | Вкл |
+| **Allowed HTML tags** | Список разрешённых тегов и атрибутов (формат Filter module) | См. ниже |
 
-```js
-// Activate / deactivate the inline editor from your own JS.
+#### Хранилище файлов
+
+| Параметр | Описание | По умолчанию |
+|----------|----------|--------------|
+| **Upload destination** | Stream wrapper для загрузки картинок через инлайн-редактор | `public://code-block-field` |
+| **Maximum upload size** | Максимальный размер файла (`5 MB`, `1024 KB`, `1G`) | `5 MB` |
+| **Default image style** | Image style по умолчанию для рендера картинок | Оригинал |
+
+#### Shadow DOM
+
+| Параметр | Описание | По умолчанию |
+|----------|----------|--------------|
+| **Default Shadow DOM mode** | `Open` (разработчик-инспектируемый) или `Closed` (доп. изоляция) | `Open` |
+
+#### Inline editor
+
+| Параметр | Описание | По умолчанию |
+|----------|----------|--------------|
+| **Show floating "Edit Mode" button** | Показывать плавающую кнопку на страницах с code-блоками | Вкл |
+
+#### Цвета инлайн-редактора
+
+| Параметр | Описание | По умолчанию |
+|----------|----------|--------------|
+| **Toolbar background** | Фон плавающей панели | `#1e1e2e` |
+| **Toolbar accent** | Акцентный цвет кнопки «Edit mode» (когда активна) и бейджа | `#ff8a3d` |
+| **Editing outline** | Контур редактируемого блока | `#ff8a3d` |
+| **Dirty outline** | Контур блока с несохранёнными изменениями | `#28a745` |
+| **Focused outline** | Контур блока с активным курсором | `#0071eb` |
+
+## Использование
+
+### Создание блока
+
+1. Откройте сущность (node / paragraph / block / term) на редактирование
+2. В поле **Code Block** заполните вкладки **HTML**, **CSS**, **JS**
+3. Чтобы сделать картинку управляемой (заменяемой через инлайн-редактор), пометьте её атрибутом `data-cbf-asset`:
+   ```html
+   <img data-cbf-asset="hero-photo" src="/sites/default/files/placeholder.jpg" alt="Главное фото">
+   ```
+4. Сохраните сущность
+
+### Inline-редактирование
+
+1. Откройте страницу с рендером блока (любой display, использующий форматтер **Code Block (Shadow DOM, inline-editable)**)
+2. Если у вас есть право `use code block field inline editor` и право `update` на сущность — в правом верхнем углу появится плавающая панель **Code Block**
+3. Нажмите **Edit mode** — все блоки на странице получат пунктирную рамку, текст станет редактируемым на месте. Картинки покажут бейдж **«✎ Replace»**, ссылки получат маленький значок карандаша
+4. Отредактируйте текст кликом по нему. Замените картинку кликом по ней (откроется модальный Drupal file-picker). Отредактируйте ссылку двойным кликом (или кликом по карандашу)
+5. Нажмите **Save changes** — все «грязные» блоки будут отправлены POST-запросом на `/admin/code-block-field/inline-save` и сохранены прямо в поле сущности. Страница **не перезагружается** — Shadow DOM сохраняет новое содержимое
+6. Нажмите **Cancel**, чтобы сбросить все несохранённые изменения и выйти из режима редактирования
+
+## Структура модуля
+
+```
+code_block_field/
+├── code_block_field.info.yml             — Информация о модуле
+├── code_block_field.module               — Хуки модуля (theme, help, entity hooks)
+├── code_block_field.install              — Install/uninstall hooks
+├── code_block_field.routing.yml          — Маршруты (save, upload, picker dialogs)
+├── code_block_field.permissions.yml      — Права доступа
+├── code_block_field.links.menu.yml       — Пункт меню в админке
+├── code_block_field.libraries.yml        — Подключаемые библиотеки (CodeMirror + свои)
+├── composer.json                         — Composer-метаданные
+├── config/
+│   ├── install/code_block_field.settings.yml — Настройки по умолчанию
+│   └── schema/code_block_field.schema.yml    — Схема конфигурации
+├── css/
+│   ├── codemirror-overrides.css          — Переопределение стилей CodeMirror
+│   ├── widget.css                        — Стили виджета в форме сущности
+│   └── inline-editor.css                 — Сили инлайн-редактора (toolbar, outlines)
+├── js/
+│   ├── codemirror-init.js                — Инициализация CodeMirror на textareas
+│   ├── widget.js                         — Синхронизация HTML ↔ скрытое поле assets
+│   ├── renderer.js                       — Монтирование Shadow DOM
+│   └── inline-editor.js                  — Inline-редактор (toolbar, contenteditable, pickers)
+├── templates/
+│   └── code-block-field.html.twig        — Twig-шаблон форматтера
+└── src/
+    ├── Controller/
+    │   └── InlineEditController.php      — AJAX endpoint'ы (save, upload, picker dialogs)
+    ├── Form/
+    │   ├── SettingsForm.php              — Форма глобальных настроек
+    │   ├── InlineImagePickerForm.php     — Модальная форма выбора изображения
+    │   └── InlineLinkPickerForm.php      — Модальная форма редактирования ссылки
+    └── Plugin/Field/
+        ├── FieldType/CodeBlockItem.php   — Тип поля (html, css, js, assets)
+        ├── FieldWidget/CodeBlockWidget.php     — Виджет с CodeMirror
+        └── FieldFormatter/CodeBlockFormatter.php — Форматтер с Shadow DOM
+```
+
+## Логика работы изоляции
+
+Каждый блок рендерится в собственный Shadow DOM root файлом `js/renderer.js`:
+
+- CSS блока **не может** утечь в тему, а CSS темы **не может** повлиять на блок
+- JavaScript выполняется в глобальном scope страницы (Shadow DOM изолирует DOM и CSS, но не JS). Внутри скрипта блока доступны переменные `host` (хост-элемент) и `shadowRoot` (его shadow root). Для доступа к DOM блока используйте `shadowRoot.querySelector(...)`
+- Для усиленной изоляции выберите режим **Closed** — внешние скрипты не смогут добраться до блока через `element.shadowRoot`. Inline-редактор продолжает работать, потому что при первом монтировании сохраняет прямую ссылку на shadow root
+
+## Кастомизация
+
+### Переопределение шаблона
+
+Скопируйте `templates/code-block-field.html.twig` в папку темы и измените по необходимости. Шаблон выводит один `<div class="cbf-host">` с `data-*` атрибутами и встроенным `<script type="application/json">` с payload'ом.
+
+### Переопределение стилей инлайн-редактора
+
+Цвета настраиваются через админку (`/admin/config/content/code-block-field`) и эммитятся как CSS custom properties. Если нужно переопределить глубже — используйте свои стили в теме:
+
+```css
+.cbf-inline-toolbar {
+  --cbf-toolbar-bg: #your-color;
+  --cbf-toolbar-accent: #your-color;
+  --cbf-edit-outline: #your-color;
+  --cbf-dirty-outline: #your-color;
+  --cbf-focus-outline: #your-color;
+}
+```
+
+### Программный API
+
+```javascript
+// Активация/деактивация инлайн-редактора из своего JS
 Drupal.codeBlockField.activate();
 Drupal.codeBlockField.deactivate();
 
-// Re-render a mounted block with new payload (useful after AJAX).
+// Перерендер блока с новым payload (полезно после AJAX)
 Drupal.codeBlockField.render(instanceId, { html, css, js });
 
-// Registry of all mounted instances on the page.
+// Реестр всех смонтированных инстансов на странице
 window.codeBlockFieldRegistry;
 ```
 
-## Caveats & known limitations
+## Endpoints
 
-- The inline editor only modifies the HTML sub-field (and the assets map).
-  Changes to the CSS or JS sub-fields must still be done through the entity
-  edit form. (You can extend the inline toolbar with a “Code” button that
-  opens the CodeMirror editor in a modal — see TODOs in `inline-editor.js`.)
-- Filtering of the inline-saved HTML uses the global `code_block_field.settings`
-  allowed_html. Per-field overrides are stored on the field but not yet
-  applied during inline save.
-- The editor relies on `DOMParser` and `Element.matches` — both available in
-  all browsers supported by Drupal 10/11.
-- CodeMirror is loaded from `cdnjs.cloudflare.com` — for offline use, drop
-  the local copies into `assets/codemirror/` and rewrite the entries in
-  `code_block_field.libraries.yml`.
+| Метод | Путь | Назначение |
+|-------|------|------------|
+| POST | `/admin/code-block-field/inline-save` | Сохраняет изменённый HTML одного field item. CSRF-защищён |
+| POST | `/admin/code-block-field/image-upload` | Загрузка картинки из инлайн-редактора. CSRF-защищён |
+| GET  | `/admin/code-block-field/image-picker/{entity_type}/{entity_id}/{field_name}/{delta}/{asset_key}` | Модальная форма выбора картинки |
+| GET  | `/admin/code-block-field/link-picker/{entity_type}/{entity_id}/{field_name}/{delta}/{link_key}` | Модальная форма редактирования ссылки |
 
-## License
+## Ограничения и особенности
 
-GPL-2.0-or-later, same as Drupal core.
+- Инлайн-редактор модифицирует только HTML-подполе (и карту assets). Изменения CSS/JS делаются через форму сущности
+- Фильтрация inline-сохранённого HTML использует глобальный `code_block_field.settings.allowed_html`. Переопределение на уровне поля сохраняется, но пока не применяется при inline-сохранении
+- Редактор использует `DOMParser` и `Element.matches` — доступны во всех браузерах, поддерживаемых Drupal 10 / 11
+- CodeMirror загружается с `cdnjs.cloudflare.com`. Для офлайн-работы скачайте локальные копии в `assets/codemirror/` и перепишите пути в `code_block_field.libraries.yml`
+- CSRF-токен генерируется на каждую сессию, поэтому render-array инлайн-редактора имеет `#cache['max-age'] = 0`
+
+## Удаление модуля
+
+1. Отключите модуль через админку или Drush:
+   ```bash
+   drush pm:uninstall code_block_field -y
+   ```
+2. При удалении Drupal автоматически удалит конфигурацию модуля. Field storage и данные поля также удалятся автоматически. File usage записи освобождаются через `hook_entity_delete()` при удалении сущности-хоста
+
+## Совместимость
+
+| Drupal | PHP | Статус |
+|--------|-----|--------|
+| 10.x   | 8.1+ | Полная поддержка |
+| 11.x   | 8.3+ | Полная поддержка |
+
+## Лицензия
+
+GPL-2.0-or-later, как и ядро Drupal.
+
+## Автор
+
+- **Mmitekk** — [https://github.com/Mmitekk](https://github.com/Mmitekk)
+
+## Ссылки
+
+- **Репозиторий:** [https://github.com/Mmitekk/code_block_field](https://github.com/Mmitekk/code_block_field)
+- **Issues:** [https://github.com/Mmitekk/code_block_field/issues](https://github.com/Mmitekk/code_block_field/issues)
+- **English documentation:** [README.en.md](./README.en.md)

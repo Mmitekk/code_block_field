@@ -1,0 +1,6 @@
+code_block_field.admin:
+  title: 'Code Block Field'
+  description: 'Configure global settings for the Code Block Field module: HTML filter, upload location, Shadow DOM mode, editor colours.'
+  parent: system.admin_config_content
+  route_name: code_block_field.settings
+  weight: 100

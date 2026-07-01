@@ -136,16 +136,28 @@ class CodeBlockFormatter extends FormatterBase {
         // the inline-save route) to the client. The token is session-specific
         // so the whole element must be regenerated for every request when
         // inline editing is enabled.
+        $config = \Drupal::config('code_block_field.settings');
         $elements[$delta]['#attached']['drupalSettings']['code_block_field'] = [
           'endpoints' => [
             'save' => Url::fromRoute('code_block_field.inline_save')->toString(),
             'upload' => Url::fromRoute('code_block_field.image_upload')->toString(),
           ],
           'csrf_token' => \Drupal::csrfToken()->get('/admin/code-block-field/inline-save'),
+          'colors' => [
+            'toolbar_bg' => $config->get('color_toolbar_bg') ?? '#1e1e2e',
+            'toolbar_accent' => $config->get('color_toolbar_accent') ?? '#ff8a3d',
+            'edit_outline' => $config->get('color_edit_outline') ?? '#ff8a3d',
+            'dirty_outline' => $config->get('color_dirty_outline') ?? '#28a745',
+            'focus_outline' => $config->get('color_focus_outline') ?? '#0071eb',
+          ],
         ];
         $elements[$delta]['#cache']['max-age'] = 0;
+        $elements[$delta]['#cache']['tags'][] = 'config:code_block_field.settings';
       }
-      $elements[$delta]['#cache']['tags'] = $entity->getCacheTags();
+      $elements[$delta]['#cache']['tags'] = array_merge(
+        $elements[$delta]['#cache']['tags'] ?? [],
+        $entity->getCacheTags()
+      );
       $elements[$delta]['#cache']['contexts'][] = 'user.permissions';
     }
     return $elements;

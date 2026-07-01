@@ -43,6 +43,30 @@
     return window.codeBlockFieldRegistry[getInstanceId(host)];
   }
 
+  // Reads the colour palette from drupalSettings (populated by the field
+  // formatter) and writes it as CSS custom properties on the toolbar element
+  // and on <body> so that all CB rules can pick them up.
+  function applyColors() {
+    const colors = (drupalSettings && drupalSettings.code_block_field && drupalSettings.code_block_field.colors) || {};
+    const toolbar = document.querySelector('.cbf-inline-toolbar');
+    const map = {
+      '--cbf-toolbar-bg': colors.toolbar_bg,
+      '--cbf-toolbar-accent': colors.toolbar_accent,
+      '--cbf-edit-outline': colors.edit_outline,
+      '--cbf-dirty-outline': colors.dirty_outline,
+      '--cbf-focus-outline': colors.focus_outline,
+    };
+    Object.keys(map).forEach(function (key) {
+      if (!map[key]) {
+        return;
+      }
+      if (toolbar) {
+        toolbar.style.setProperty(key, map[key]);
+      }
+      document.body.style.setProperty(key, map[key]);
+    });
+  }
+
   function buildToolbar() {
     if (document.querySelector('.cbf-inline-toolbar')) {
       return;
@@ -71,6 +95,8 @@
     toolbar.querySelector('.cbf-js-toggle').addEventListener('click', onToggle);
     toolbar.querySelector('.cbf-js-save').addEventListener('click', onSave);
     toolbar.querySelector('.cbf-js-cancel').addEventListener('click', onCancel);
+
+    applyColors();
   }
 
   function setHint(text) {
