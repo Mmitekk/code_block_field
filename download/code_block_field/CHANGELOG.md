@@ -5,6 +5,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.2] — 2026-07-01
+
+### Fixed
+
+- **WYSIWYG formatting (bold, italic, underline, strikethrough) did not
+  apply inside the Shadow DOM.** Root cause: `document.execCommand()` is
+  unreliable inside Shadow DOM — in Chromium the command runs against
+  the light-DOM selection (which is empty) instead of the selection
+  inside the shadow root, so pressing B/I/U/S in the floating toolbar
+  appeared to do nothing.
+
+  Replaced `execCommand` with direct DOM manipulation using the Range
+  API:
+
+  - **`bold` / `italic` / `underline` / `strikeThrough`** now wrap the
+    current selection in `<strong>` / `<em>` / `<u>` / `<s>` via
+    `Range.surroundContents()`. If the selection crosses element
+    boundaries (where `surroundContents` throws), the code falls back
+    to `extractContents()` + wrap + `insertNode()`. Pressing the
+    button a second time toggles the format off (unwraps the tag).
+  - **`foreColor`** wraps the selection in `<span style="color:…">`
+    using the same surround/fallback logic.
+  - **`removeFormat`** walks the selection and unwraps all `<strong>`,
+    `<em>`, `<u>`, `<s>`, `<b>`, `<i>`, and `<span>` tags.
+  - **`createLink`** wraps the selection in `<a>` using the same
+    surround/fallback logic, then opens the existing link picker modal.
+  - **`formatBlock` (H2/H3/H4/¶)** walks up from the selection to the
+    nearest block ancestor (`<p>`, `<h1>`–`<h6>`, `<div>`, `<li>`,
+    `<blockquote>`) and replaces it with a new element of the target
+    tag, preserving `class` and `style`. No longer relies on
+    `execCommand('formatBlock')`.
+  - **Toolbar button active state** (`is-active` class on B/I/U/S
+    buttons) now checks the actual DOM ancestors of the selection
+    instead of `document.queryCommandState()`, which also doesn't
+    work inside Shadow DOM.
+
+  Alignment (`justifyLeft` / `justifyCenter` / `justifyRight` /
+  `justifyFull`) and list commands (`insertUnorderedList` /
+  `insertOrderedList`) still use `execCommand` because they operate on
+  block ancestors and happen to work in Chromium — but they may not
+  work in Firefox. If you see issues with those, report them and
+  I'll add a manual implementation.
+
 ## [1.3.1] — 2026-07-01
 
 ### Fixed
@@ -448,6 +491,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with installation, configuration, usage, structure, and customisation
   instructions.
 
+[1.3.2]: https://github.com/Mmitekk/code_block_field/releases/tag/1.3.2
 [1.3.1]: https://github.com/Mmitekk/code_block_field/releases/tag/1.3.1
 [1.3.0]: https://github.com/Mmitekk/code_block_field/releases/tag/1.3.0
 [1.2.6]: https://github.com/Mmitekk/code_block_field/releases/tag/1.2.6
