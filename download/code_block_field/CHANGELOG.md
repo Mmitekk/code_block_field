@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.4] — 2026-07-01
+
+### Fixed
+
+- **SVG attributes (viewBox, fill, stroke, etc.) were STILL being stripped on
+  save even after 1.2.3.** Root cause: the core `filter_html` plugin (which
+  our `code_block_field_filter_html()` helper was delegating to) uses
+  `DOMDocument` internally, which lowercases attribute names. SVG
+  attributes like `viewBox` were being stored as `viewbox` in the DOM,
+  but the whitelist check in `filter_html` is case-sensitive — so `viewbox`
+  never matched `viewBox` in `allowed_html`, and the attribute was silently
+  stripped. The 1.2.3 fix (removing filterHtml from the formatter) only
+  fixed the render path; the save path still went through the broken
+  core filter.
+
+- **Replaced the core `filter_html` plugin with a custom regex-based
+  `HtmlFilter` class.** The new `Drupal\code_block_field\HtmlFilter`:
+  - Parses the `allowed_html` string (same format as the Filter module)
+    into a lowercased whitelist for case-insensitive lookup.
+  - Walks through every HTML tag with a regex (`<((/?)([a-zA-Z][a-zA-Z0-9]*))([^>]*)>`).
+  - Removes tags and attributes that are not in the whitelist.
+  - **Preserves the original case of attribute names** in the output —
+    so `<svg viewBox="...">` stays `<svg viewBox="...">` instead of
+    being lowercased to `viewbox`.
+  - Always allows the `data-cbf-asset` attribute (used internally by
+    the inline editor) regardless of the whitelist.
+  - Supports wildcard attributes (e.g. `data-*`).
+
+- After this fix, SVG icons like
+  ```html
+  <svg viewBox="0 0 24 24" width="14" height="14" fill="none"
+       stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+       stroke-linejoin="round">
+    <polyline points="20 6 9 17 4 12"></polyline>
+  </svg>
+  ```
+  survive the save filter intact.
+
 ## [1.2.3] — 2026-07-01
 
 ### Fixed
@@ -276,6 +314,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with installation, configuration, usage, structure, and customisation
   instructions.
 
+[1.2.4]: https://github.com/Mmitekk/code_block_field/releases/tag/1.2.4
 [1.2.3]: https://github.com/Mmitekk/code_block_field/releases/tag/1.2.3
 [1.2.2]: https://github.com/Mmitekk/code_block_field/releases/tag/1.2.2
 [1.2.1]: https://github.com/Mmitekk/code_block_field/releases/tag/1.2.1
