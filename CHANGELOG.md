@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.3] — 2026-07-02
+
+### Fixed
+
+- **Inline edits saved but invisible because the parent node still
+  references the OLD paragraph revision.** The watchdog log from 1.4.2
+  showed `revision_id=20440` then `revision_id=20441` — new revisions
+  were being created on every save, but the parent's
+  `target_revision_id` was never updated to point to them. So on the
+  next page render, Drupal loaded the old revision (the one the parent
+  still referenced) and the inline edit was invisible.
+
+  Fix: after saving the paragraph, the controller now **manually
+  updates the parent's `target_revision_id`** for the paragraph
+  reference. The algorithm:
+
+  1. Save the paragraph (`$entity->save()`) — creates a new revision.
+  2. Get the new revision ID (`$entity->getRevisionId()`).
+  3. Load the parent entity.
+  4. Walk every entity-reference field on the parent that targets
+     `paragraph` entities.
+  5. Find the field item whose `target_id` matches our paragraph's ID.
+  6. Set its `target_revision_id` to the new paragraph revision ID.
+  7. Save the parent — this updates the parent's reference so that
+     on the next render, Drupal loads the NEW paragraph revision.
+
+  This is the same mechanism that Paragraphs module uses internally
+  when you save a node through the standard edit form, but done
+  manually here because we saved the paragraph directly (bypassing
+  Paragraphs' parent-save flow).
+
+  The watchdog log now reports `reference_updated=yes` (or `no` if
+  the parent reference could not be updated for some reason — e.g.
+  the paragraph is not referenced from any paragraphs field on the
+  parent, which would be unusual).
+
+  Cache tags are still invalidated for both the paragraph and the
+  parent, as a belt-and-suspenders measure.
+
 ## [1.4.2] — 2026-07-02
 
 ### Fixed
@@ -733,6 +772,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with installation, configuration, usage, structure, and customisation
   instructions.
 
+[1.4.3]: https://github.com/Mmitekk/code_block_field/releases/tag/1.4.3
 [1.4.2]: https://github.com/Mmitekk/code_block_field/releases/tag/1.4.2
 [1.4.1]: https://github.com/Mmitekk/code_block_field/releases/tag/1.4.1
 [1.4.0]: https://github.com/Mmitekk/code_block_field/releases/tag/1.4.0

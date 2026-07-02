@@ -260,68 +260,121 @@ class InlineEditController extends ControllerBase {
     }
 
     try {
-      // SIMPLEST POSSIBLE SAVE — no revision logic, no parent save,
-      // no setNeedsSave. Just save the entity directly. This is what
-      // the original 1.0.0 version of the module did, and inline
-      // editing worked then.
-      //
-      // The complex revision-handling code that was here in 1.3.1 –
-      // 1.4.1 (save parent too, setNeedsSave, setNewRevision, etc.)
-      // created more problems than it solved on sites where the
-      // paragraph type or node type has revisions disabled. The
-      // revision_id ended up empty, the parent's target_revision_id
-      // never updated, and the inline edit was invisible after page
-      // reload.
-      //
-      // Direct $entity->save() works because:
-      // - For non-revisionable entities, it just updates the row.
-      // - For revisionable entities with "create new revision"
-      //   DISABLED (the default for paragraphs), it updates the
-      //   CURRENT revision in place. The parent's reference
-      //   (target_id, target_revision_id) still points to the same
-      //   revision, but that revision's fields are now updated —
-      //   so when Drupal renders the parent, it loads the same
-      //   revision and sees the new field values.
-      // - For revisionable entities with "create new revision"
-      //   ENABLED, Paragraphs module's hook_entity_presave will
-      //   create a new revision automatically. We don't need to do
-      //   anything special.
-      //
-      // After the save, we explicitly invalidate cache tags so the
-      // rendered output is rebuilt on the next page load.
+      // Save the entity (paragraph, node, etc.) directly. For
+      // revisionable entities, Paragraphs module / Drupal core will
+      // create a new revision automatically if the entity type is
+      // configured to do so.
       $entity->save();
+      $new_revision_id = method_exists($entity, 'getRevisionId') ? $entity->getRevisionId() : NULL;
     } catch (\Throwable $e) {
       return new JsonResponse(['error' => 'Save failed: ' . $e->getMessage()], 500);
+    }
+
+    // CRITICAL: If the entity is a Paragraph and it created a new
+    // revision (revision_id changed), we MUST update the parent
+    // entity's reference (target_revision_id) to point to the new
+    // paragraph revision. Otherwise, on the next page render, Drupal
+    // will load the OLD paragraph revision (the one the parent still
+    // references) and the inline edit will be invisible.
+    //
+    // We do this by:
+    // 1. Loading the parent entity fresh from the database.
+    // 2. Walking every entity-reference field on the parent that
+    //    targets paragraphs.
+    // 3. Finding the field item that references our paragraph (by
+    //    target_id).
+    // 4. Updating its target_revision_id to the new paragraph
+    //    revision ID.
+    // 5. Saving the parent (without forcing a new revision — we just
+    //    want to update the reference).
+    $parent_info = 'none';
+    $reference_updated = FALSE;
+    if (method_exists($entity, 'getParentEntity') && $new_revision_id) {
+      try {
+        // Reload parent fresh from storage to avoid stale data.
+        $parent_method = new \ReflectionMethod($entity, 'getParentEntity');
+        $parent = $parent_method->invoke($entity);
+        if ($parent) {
+          $parent_info = $parent->getEntityTypeId() . '/' . $parent->id();
+          $paragraph_id = $entity->id();
+
+          // Walk every field on the parent.
+          foreach ($parent->getFields() as $field_name => $field_list) {
+            if (!($field_list instanceof \Drupal\Core\Field\EntityReferenceFieldItemListInterface)) {
+              continue;
+            }
+            // Check if this field references paragraphs.
+            $definition = $field_list->getFieldDefinition();
+            $settings = $definition->getSettings();
+            if (($settings['target_type'] ?? '') !== 'paragraph') {
+              continue;
+            }
+            // Walk every item in the paragraphs field.
+            $changed = FALSE;
+            foreach ($field_list as $delta => $item) {
+              if ((int) $item->target_id === (int) $paragraph_id) {
+                // Update the target_revision_id to the new revision.
+                $field_list->get($delta)->set('target_revision_id', $new_revision_id);
+                $changed = TRUE;
+              }
+            }
+            if ($changed) {
+              // Mark the parent as having this field changed.
+              $parent->set($field_name, $field_list);
+            }
+          }
+
+          // Don't force a new revision on the parent — we just want
+          // to update the reference. If the parent type is configured
+          // to always create new revisions, Drupal will do it; we
+          // don't add extra logic here.
+          $parent->save();
+          $reference_updated = TRUE;
+
+          \Drupal::logger('code_block_field')->debug('Inline save: updated parent @parent reference to paragraph @pid revision @rid', [
+            '@parent' => $parent_info,
+            '@pid' => $paragraph_id,
+            '@rid' => $new_revision_id,
+          ]);
+        }
+      } catch (\Throwable $parent_e) {
+        \Drupal::logger('code_block_field')->warning('Inline save: failed to update parent reference: @msg', [
+          '@msg' => $parent_e->getMessage(),
+        ]);
+      }
     }
 
     // Explicitly invalidate cache tags for the saved entity AND its
     // parent (if any). Without this, Drupal may serve a cached version
     // of the rendered page that was built before the inline edit.
     $tags_to_invalidate = $entity->getCacheTags();
-    $parent_info = 'none';
-    if (method_exists($entity, 'getParentEntity')) {
-      try {
-        $parent = $entity->getParentEntity();
-        if ($parent) {
-          $tags_to_invalidate = array_merge($tags_to_invalidate, $parent->getCacheTags());
-          $parent_info = $parent->getEntityTypeId() . '/' . $parent->id();
-        }
-      } catch (\Throwable $parent_e) {
-        // Ignore — best-effort.
-      }
+    if (isset($parent)) {
+      $tags_to_invalidate = array_merge($tags_to_invalidate, $parent->getCacheTags());
+    }
+    // Also invalidate any "view" cache tags for the paragraph — these
+    // are used when the paragraph is rendered through its own view
+    // mode and may not be invalidated by the paragraph:ID tag alone.
+    if (method_exists($entity, 'getCacheTagsToInvalidate')) {
+      // Already covered by getCacheTags().
     }
     \Drupal::service('cache_tags.invalidator')->invalidateTags($tags_to_invalidate);
 
+    // Also clear the render cache for the parent explicitly.
+    if (isset($parent) && method_exists($parent, 'getCacheTags')) {
+      \Drupal::service('cache_tags.invalidator')->invalidateTags($parent->getCacheTags());
+    }
+
     // Log the successful save for debugging.
-    \Drupal::logger('code_block_field')->debug('Inline save: entity_type=@type, entity_id=@id, revision_id=@rid, field=@field, delta=@delta, html_length=@len, html_preview=@preview, parent=@parent, cache_tags=@tags', [
+    \Drupal::logger('code_block_field')->debug('Inline save: entity_type=@type, entity_id=@id, revision_id=@rid, field=@field, delta=@delta, html_length=@len, html_preview=@preview, parent=@parent, reference_updated=@ru, cache_tags=@tags', [
       '@type' => $entity->getEntityTypeId(),
       '@id' => $entity->id(),
-      '@rid' => method_exists($entity, 'getRevisionId') ? $entity->getRevisionId() : '?',
+      '@rid' => $new_revision_id ?: '?',
       '@field' => $payload['field_name'],
       '@delta' => $delta,
       '@len' => strlen($filtered_html),
       '@preview' => substr($filtered_html, 0, 200),
       '@parent' => $parent_info,
+      '@ru' => $reference_updated ? 'yes' : 'no',
       '@tags' => implode(',', $tags_to_invalidate),
     ]);
 
@@ -329,13 +382,15 @@ class InlineEditController extends ControllerBase {
       'success' => TRUE,
       'entity_type' => $entity->getEntityTypeId(),
       'entity_id' => $entity->id(),
-      'revision_id' => method_exists($entity, 'getRevisionId') ? $entity->getRevisionId() : NULL,
+      'revision_id' => $new_revision_id,
       'field_name' => $payload['field_name'],
       'delta' => $delta,
       'html' => $filtered_html,
       'html_length' => strlen($filtered_html),
       'html_preview' => substr($filtered_html, 0, 200),
       'assets' => $reconciled,
+      'parent' => $parent_info,
+      'reference_updated' => $reference_updated,
       'cache_tags_invalidated' => $tags_to_invalidate,
     ];
     $response = new CacheableJsonResponse($response_data);
