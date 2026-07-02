@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.4] — 2026-07-02
+
+### Fixed
+
+- **`Unable to get a value with a non-numeric delta in a list`
+  exception in 1.4.3.** The 1.4.3 reference-update logic called
+  `$field_list->get($delta)->set('target_revision_id', $new_rid)`,
+  but Paragraphs field item lists can throw this exception when
+  `->get()` is called with a numeric index — particularly when the
+  field has been loaded through `getParentEntity()` rather than
+  through the parent's normal field retrieval path.
+
+  Rewrote the reference-update logic to build a fresh values array
+  and call `$parent->set($field_name, $new_values)` once, instead of
+  mutating individual items through `->get($delta)`. This is the
+  recommended way to update entity reference field values in Drupal
+  and avoids the `->get()` issue entirely.
+
+  The watchdog log will now show `reference_updated=yes` (instead of
+  the previous `reference_updated=no` with the exception warning).
+
 ## [1.4.3] — 2026-07-02
 
 ### Fixed
@@ -772,6 +793,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with installation, configuration, usage, structure, and customisation
   instructions.
 
+[1.4.4]: https://github.com/Mmitekk/code_block_field/releases/tag/1.4.4
 [1.4.3]: https://github.com/Mmitekk/code_block_field/releases/tag/1.4.3
 [1.4.2]: https://github.com/Mmitekk/code_block_field/releases/tag/1.4.2
 [1.4.1]: https://github.com/Mmitekk/code_block_field/releases/tag/1.4.1

@@ -298,36 +298,50 @@ class InlineEditController extends ControllerBase {
           $parent_info = $parent->getEntityTypeId() . '/' . $parent->id();
           $paragraph_id = $entity->id();
 
-          // Walk every field on the parent.
+          // Walk every field on the parent and find paragraphs fields.
           foreach ($parent->getFields() as $field_name => $field_list) {
             if (!($field_list instanceof \Drupal\Core\Field\EntityReferenceFieldItemListInterface)) {
               continue;
             }
-            // Check if this field references paragraphs.
             $definition = $field_list->getFieldDefinition();
             $settings = $definition->getSettings();
             if (($settings['target_type'] ?? '') !== 'paragraph') {
               continue;
             }
-            // Walk every item in the paragraphs field.
-            $changed = FALSE;
-            foreach ($field_list as $delta => $item) {
-              if ((int) $item->target_id === (int) $paragraph_id) {
-                // Update the target_revision_id to the new revision.
-                $field_list->get($delta)->set('target_revision_id', $new_revision_id);
-                $changed = TRUE;
+
+            // Build a fresh values array, replacing target_revision_id
+            // for the item that references our paragraph. Using ->set()
+            // with a values array instead of ->get($delta)->set() avoids
+            // the "Unable to get a value with a non-numeric delta in a
+            // list" exception that some Paragraphs field configurations
+            // throw when ->get() is called with a numeric index.
+            $new_values = [];
+            $found = FALSE;
+            foreach ($field_list as $item) {
+              $tid = (int) $item->target_id;
+              if ($tid === (int) $paragraph_id) {
+                $new_values[] = [
+                  'target_id' => $item->target_id,
+                  'target_revision_id' => $new_revision_id,
+                ];
+                $found = TRUE;
+              }
+              else {
+                $new_values[] = [
+                  'target_id' => $item->target_id,
+                  'target_revision_id' => $item->target_revision_id,
+                ];
               }
             }
-            if ($changed) {
-              // Mark the parent as having this field changed.
-              $parent->set($field_name, $field_list);
+            if ($found) {
+              $parent->set($field_name, $new_values);
             }
           }
 
-          // Don't force a new revision on the parent — we just want
-          // to update the reference. If the parent type is configured
-          // to always create new revisions, Drupal will do it; we
-          // don't add extra logic here.
+          // Save the parent. If the parent type is configured to create
+          // new revisions, Drupal will do so automatically — that's
+          // fine and necessary so the parent's reference to the new
+          // paragraph revision is persisted.
           $parent->save();
           $reference_updated = TRUE;
 
