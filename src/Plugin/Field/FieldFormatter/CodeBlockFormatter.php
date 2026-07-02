@@ -96,6 +96,25 @@ class CodeBlockFormatter extends FormatterBase {
     $inline_enabled = !empty($settings['enable_inline_editing'])
       && \Drupal::currentUser()->hasPermission('use code block field inline editor');
 
+    // Add a watchdog log entry ONCE per request to help diagnose inline
+    // editor enable/disable decisions. Without this, when inline editing
+    // silently fails to load (no JS, no toolbar), it's very hard to tell
+    // whether the formatter decided to disable it or the JS just failed
+    // to initialise.
+    static $logged = FALSE;
+    if (!$logged) {
+      $logged = TRUE;
+      \Drupal::logger('code_block_field')->debug('Formatter: inline_enabled=@enabled, enable_inline_editing_setting=@setting, has_permission=@perm, user_id=@uid, entity_type=@type, entity_id=@id, field=@field', [
+        '@enabled' => $inline_enabled ? 'yes' : 'no',
+        '@setting' => !empty($settings['enable_inline_editing']) ? 'yes' : 'no',
+        '@perm' => \Drupal::currentUser()->hasPermission('use code block field inline editor') ? 'yes' : 'no',
+        '@uid' => \Drupal::currentUser()->id(),
+        '@type' => $entity->getEntityTypeId(),
+        '@id' => $entity->id(),
+        '@field' => $field_name,
+      ]);
+    }
+
     foreach ($items as $delta => $item) {
       $assets = is_array($item->assets) ? $item->assets : [];
       // Resolve managed file URLs and inject them into the HTML.
@@ -161,7 +180,13 @@ class CodeBlockFormatter extends FormatterBase {
         $elements[$delta]['#cache']['tags'] ?? [],
         $entity->getCacheTags()
       );
+      // Use BOTH user.permissions and user contexts. user.permissions
+      // varies the cache by permission sets (so admin vs anon get
+      // different cached versions). user varies by user ID (so two
+      // different admins get different cached versions, which matters
+      // because the CSRF token in drupalSettings is per-session).
       $elements[$delta]['#cache']['contexts'][] = 'user.permissions';
+      $elements[$delta]['#cache']['contexts'][] = 'user';
     }
     return $elements;
   }

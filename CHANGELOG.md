@@ -5,6 +5,72 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.5] — 2026-07-02
+
+### Fixed
+
+- **Inline editor did not load on pages that were previously cached for
+  anonymous users.** Symptom: `inline-editor.js` was missing from the
+  page HTML, the `.cbf-host` element had the `cbf-host--inline-disabled`
+  class instead of `cbf-host--inline-enabled`, and `drupalSettings`
+  did not contain the `code_block_field` key with the save endpoint
+  and CSRF token.
+
+  Root cause: the formatter added `user.permissions` as a cache
+  context, which is enough to vary the cache by permission sets, but
+  NOT enough to vary it per user. When the CSRF token (which is
+  session-specific) was emitted into `drupalSettings`, Drupal could
+  still serve a cached version built for a different user/session,
+  causing the inline editor to silently fail to load on the next page
+  view.
+
+  Fix: the formatter now adds BOTH `user.permissions` and `user` as
+  cache contexts. The `user` context varies the cache by user ID, so
+  every authenticated user gets their own cached version with their
+  own CSRF token. Anonymous users still share a single cached version
+  (which never has inline editing enabled, so no CSRF token is
+  emitted).
+
+### Added
+
+- **Watchdog diagnostic log in the formatter.** The formatter now
+  logs a `debug` entry to the `code_block_field` channel on every
+  render with: `inline_enabled`, `enable_inline_editing_setting`,
+  `has_permission`, `user_id`, `entity_type`, `entity_id`, `field`.
+  Check `/admin/reports/dblog` filtered by `code_block_field` to see
+  exactly why inline editing is enabled or disabled for a given page.
+
+## [1.3.4] — 2026-07-01
+
+### Fixed
+
+- **Inline-edited content was not visible on the next page render when
+  the Code Block field is on a Paragraph inside a node.** Root cause:
+  the parent node caches the rendered paragraph output under its own
+  cache tags, and while `$entity->save()` (paragraph save) plus
+  `$parent->save()` (parent save, added in 1.3.1) should invalidate
+  those tags automatically, in practice on sites with Layout Builder
+  or complex render pipelines the cache is sometimes not invalidated
+  correctly.
+
+  The controller now **explicitly invalidates cache tags** for both
+  the saved entity and its parent (via `cache_tags.invalidator`
+  service) after every inline save. The list of invalidated tags is
+  included in the JSON response for debugging.
+
+### Added
+
+- **More detailed logging** to help diagnose inline-save issues:
+  - The browser console now logs the full payload that is being sent
+    to the server, including `html_length`, whether the HTML contains
+    `<em>` / `<strong>` tags, and a 200-char preview.
+  - The watchdog log entry now includes a 200-character preview of
+    the saved HTML.
+  - The JSON response from `/admin/code-block-field/inline-save` now
+    includes `html_length`, `html_preview`, and
+    `cache_tags_invalidated` so you can verify exactly what was saved
+    and which cache tags were invalidated.
+
 ## [1.3.3] — 2026-07-01
 
 ### Fixed
@@ -527,6 +593,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with installation, configuration, usage, structure, and customisation
   instructions.
 
+[1.3.5]: https://github.com/Mmitekk/code_block_field/releases/tag/1.3.5
+[1.3.4]: https://github.com/Mmitekk/code_block_field/releases/tag/1.3.4
 [1.3.3]: https://github.com/Mmitekk/code_block_field/releases/tag/1.3.3
 [1.3.2]: https://github.com/Mmitekk/code_block_field/releases/tag/1.3.2
 [1.3.1]: https://github.com/Mmitekk/code_block_field/releases/tag/1.3.1
