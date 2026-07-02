@@ -5,6 +5,57 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] — 2026-07-02
+
+### Fixed
+
+- **Inline-edited content was saved but not visible after page reload
+  when the Code Block field is on a Paragraph.** This was the
+  long-standing issue that 1.3.1, 1.3.4, and 1.3.5 all attempted to
+  fix without success.
+
+  Root cause (finally identified): the Paragraphs module stores
+  paragraph references on the parent entity as
+  `(target_id, target_revision_id)`. When you call
+  `$paragraph->save()` directly (which is what every previous version
+  of this module did), Paragraphs creates a NEW revision of the
+  paragraph — but the parent's `target_revision_id` still points to
+  the OLD revision. On the next page render, Drupal loads the OLD
+  revision (the one the parent references), so the inline edit is
+  invisible even though the paragraph was technically saved. The
+  previous "save parent too" fix (1.3.1) didn't help because
+  `$parent->save()` without changing the reference just re-saves the
+  parent with the SAME old `target_revision_id`.
+
+  The correct flow (now implemented) is:
+  1. Modify the paragraph's fields (already done above the save
+     block).
+  2. Call `$paragraph->setNeedsSave(TRUE)` — this is a Paragraphs
+     module API that marks the paragraph as having unsaved changes.
+  3. Call `$parent->save()` — Paragraphs module's
+     `paragraphs_entity_presave()` runs as part of the parent save,
+     detects the `needsSave` flag, saves the paragraph with a new
+     revision, AND updates the parent's `target_revision_id` to
+     point to the new revision. The parent save also correctly
+     invalidates the parent's render cache.
+
+  For non-paragraph entities (nodes, block_content, taxonomy_term
+  with the code_block field directly), we still save the entity
+  directly via `$entity->save()` — there's no parent reference to
+  update.
+
+  The JSON response now includes `saved_through_parent` (true/false)
+  so you can verify which save path was taken. The watchdog log
+  includes the new revision ID and the parent entity type/id.
+
+### Notes
+
+- This fix supersedes the `getParentEntity` + `$parent->save()`
+  approach from 1.3.1 (which was insufficient) and the cache tag
+  invalidation from 1.3.4 (which was treating the symptom, not the
+  cause). The cache tag invalidation is still in place as a
+  belt-and-suspenders measure.
+
 ## [1.3.5] — 2026-07-02
 
 ### Fixed
@@ -593,6 +644,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with installation, configuration, usage, structure, and customisation
   instructions.
 
+[1.4.0]: https://github.com/Mmitekk/code_block_field/releases/tag/1.4.0
 [1.3.5]: https://github.com/Mmitekk/code_block_field/releases/tag/1.3.5
 [1.3.4]: https://github.com/Mmitekk/code_block_field/releases/tag/1.3.4
 [1.3.3]: https://github.com/Mmitekk/code_block_field/releases/tag/1.3.3

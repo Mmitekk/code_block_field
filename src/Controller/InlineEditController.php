@@ -260,53 +260,89 @@ class InlineEditController extends ControllerBase {
     }
 
     try {
-      $entity->save();
-
-      // If the saved entity is a Paragraph (or any entity with a parent
-      // entity reference), we also need to save the parent so that the
-      // parent's reference to this entity is updated. Without this,
-      // inline-edited paragraphs inside a node's paragraphs field or
-      // inside a Layout Builder section would appear "not saved" because
-      // the parent entity still references the old revision/content.
-      if (method_exists($entity, 'getParentEntity')) {
+      // For Paragraph entities (and any entity with a getParentEntity()
+      // method), we MUST save through the parent — NOT directly on the
+      // paragraph. Here's why:
+      //
+      // The Paragraphs module stores paragraph references on the parent
+      // entity as (target_id, target_revision_id). When you call
+      // $paragraph->save() directly, Paragraphs creates a NEW revision
+      // of the paragraph, but the parent's reference still points to the
+      // OLD revision. On the next page render, Drupal loads the OLD
+      // revision (the one the parent references) — so the inline edit
+      // is invisible even though the paragraph was technically saved.
+      //
+      // The correct flow is:
+      //   1. Modify the paragraph's fields (already done above).
+      //   2. Mark the paragraph as needing save via setNeedsSave(TRUE).
+      //   3. Save the PARENT — Paragraphs module's hook_entity_presave
+      //      will detect the needsSave flag, save the paragraph with a
+      //      new revision, AND update the parent's target_revision_id
+      //      to point to the new revision.
+      //
+      // For non-paragraph entities (nodes, block_content, taxonomy_term
+      // with the code_block field directly), we save the entity directly.
+      $saved_through_parent = FALSE;
+      if (method_exists($entity, 'getParentEntity') && method_exists($entity, 'setNeedsSave')) {
         try {
           $parent = $entity->getParentEntity();
           if ($parent) {
+            // Mark the paragraph as needing save so Paragraphs module
+            // will save it (with a new revision if applicable) and
+            // update the parent's reference when we save the parent.
+            $entity->setNeedsSave(TRUE);
             $parent->save();
+            $saved_through_parent = TRUE;
+
+            \Drupal::logger('code_block_field')->debug('Inline save: saved paragraph @id through parent @ptype/@pid (new revision @rid)', [
+              '@id' => $entity->id(),
+              '@ptype' => $parent->getEntityTypeId(),
+              '@pid' => $parent->id(),
+              '@rid' => method_exists($entity, 'getRevisionId') ? $entity->getRevisionId() : '?',
+            ]);
           }
         } catch (\Throwable $parent_e) {
-          // Log but don't fail — the paragraph itself was saved
-          // successfully, the parent save is best-effort.
-          \Drupal::logger('code_block_field')->warning('Inline save: paragraph saved but parent entity save failed: @message', [
-            '@message' => $parent_e->getMessage(),
+          // Parent save failed — fall back to direct save.
+          \Drupal::logger('code_block_field')->warning('Inline save: parent save failed (@msg), falling back to direct paragraph save', [
+            '@msg' => $parent_e->getMessage(),
           ]);
         }
+      }
+
+      if (!$saved_through_parent) {
+        // Direct save for non-paragraph entities, or as a fallback when
+        // parent save failed.
+        $entity->save();
       }
     } catch (\Throwable $e) {
       return new JsonResponse(['error' => 'Save failed: ' . $e->getMessage()], 500);
     }
 
     // Log the successful save for debugging.
-    \Drupal::logger('code_block_field')->debug('Inline save: entity_type=@type, entity_id=@id, field=@field, delta=@delta, html_length=@len', [
+    \Drupal::logger('code_block_field')->debug('Inline save: entity_type=@type, entity_id=@id, revision_id=@rid, field=@field, delta=@delta, html_length=@len, html_preview=@preview, saved_through_parent=@stp', [
       '@type' => $entity->getEntityTypeId(),
       '@id' => $entity->id(),
+      '@rid' => method_exists($entity, 'getRevisionId') ? $entity->getRevisionId() : '?',
       '@field' => $payload['field_name'],
       '@delta' => $delta,
       '@len' => strlen($filtered_html),
+      '@preview' => substr($filtered_html, 0, 200),
+      '@stp' => $saved_through_parent ? 'yes' : 'no',
     ]);
 
     $response_data = [
       'success' => TRUE,
       'entity_type' => $entity->getEntityTypeId(),
       'entity_id' => $entity->id(),
+      'revision_id' => method_exists($entity, 'getRevisionId') ? $entity->getRevisionId() : NULL,
       'field_name' => $payload['field_name'],
       'delta' => $delta,
       'html' => $filtered_html,
+      'html_length' => strlen($filtered_html),
+      'html_preview' => substr($filtered_html, 0, 200),
       'assets' => $reconciled,
+      'saved_through_parent' => $saved_through_parent,
     ];
-    if (isset($create_revision) && $create_revision && $entity instanceof \Drupal\Core\Entity\RevisionableInterface) {
-      $response_data['revision_id'] = method_exists($entity, 'getRevisionId') ? $entity->getRevisionId() : NULL;
-    }
     $response = new CacheableJsonResponse($response_data);
     $response->addCacheableDependency($entity);
     return $response;
