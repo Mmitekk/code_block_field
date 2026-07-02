@@ -7,19 +7,26 @@ A Drupal 9.5+ / 10+ / 11 module that provides a new field type for storing an **
 ## Features
 
 - **New field type `code_block`** with sub-fields **HTML**, **CSS**, **JS** and a serialised **assets** map (managed files)
-- **Shadow DOM rendering** — the block’s CSS does not leak into the host theme and vice versa. Both `open` and `closed` modes are supported
+- **Shadow DOM rendering** — the block's CSS does not leak into the host theme and vice versa. `:root` variables are automatically rewritten to `:host`, `html/body` selectors to `:host`, and theme variables are bridged via `inherit`
 - **Page-builder-style inline editor:**
-  - Floating toolbar in the top-right corner with **Edit mode**, **Save changes**, **Cancel** buttons
+  - Floating toolbar in the top-right corner with **Edit mode**, **Save**, **Cancel** buttons
   - `contenteditable` for every text-bearing element (h1–h6, p, span, a, li, td, figcaption, blockquote, strong, em, b, i, …)
+  - **WYSIWYG floating toolbar** on text selection (Medium/Notion-style): B/I/U/S, H2/H3/H4, alignment, lists, text colour, link, clear format — with toggle and active-format highlighting
   - Click any `<img data-cbf-asset="key">` to replace it through a Drupal modal file picker, with alt-text editing
   - Double-click any `<a>` (or click the pencil ✎ handle) to edit `href`, `target`, `rel`, link text through a modal form
+  - **Resize handles** for images (corner handles that preserve aspect ratio)
+  - **Context menu** for images: Replace, Upload from URL, Edit alt, Reset size, Delete
+  - **"+" button** in each block to insert a new image
   - Dirty tracking + CSRF-protected JSON save endpoint
+  - **Correct paragraph saving** — after saving the paragraph, the parent entity's `target_revision_id` is updated to point to the new revision, so changes are visible immediately after page reload
 - **CodeMirror 5 editor** in the entity edit form — HTML / CSS / JS modes, autocomplete, tag auto-close, themes (Material Darker / Dracula / Nord / Monokai / Default)
-- **Global admin settings page** (like FAQ by URL): HTML filter, upload location, max filesize, Shadow DOM mode, editor colours
+- **HTML is saved verbatim** — no tag or attribute filtering. What the author enters is what gets saved (SVG, presentation attributes, inline styles — everything passes through). The `filter_html` setting remains in the admin form for backward compatibility but is disabled by default
+- **Global admin settings page** (like FAQ by URL): HTML filter, upload location, max filesize, Shadow DOM mode, editor colours, revision-creation option
 - **Per-role permissions** + `update` access check on the host entity on every save
 - **File usage tracking** — every image uploaded through the inline editor is associated with the entity through `file.usage` and is released automatically when the entity is deleted
-- **HTML filtering** on every save through the core `filter_html` plugin
-- **Compatibility** — Drupal 9.5.x, 10.x and 11.x (PHP 7.4+ on 9.5, 8.1+ on 10, 8.3+ on 11)
+- **Cache contexts `user` + `user.permissions`** — every user gets their own page cache with their own CSRF token
+- **Detailed logging** — watchdog logs for every inline-save (entity_type, entity_id, revision_id, html_length, parent, cache_tags) and every formatter render (inline_enabled, has_permission, user_id)
+- **Compatibility** — Drupal 9.5.x, 10.x and 11.x (PHP 7.4+ on 9.5, 8.1+ on 10, 8.3+ on 11), works with Paragraphs 1.x
 
 ## Installation
 
@@ -280,6 +287,15 @@ window.codeBlockFieldRegistry;
 | 10.x   | 8.1+ | Fully supported |
 | 11.x   | 8.3+ | Fully supported |
 
+**Tested with:**
+- Paragraphs 1.21+ (inline paragraph saving via `target_revision_id` update)
+- Layout Builder (inline paragraph saving inside sections)
+- Field UI, File, Image, Filter (included as dependencies)
+
+## Current version
+
+**1.4.4** — see [CHANGELOG.md](./CHANGELOG.md) for the full change history and [Releases](https://github.com/Mmitekk/code_block_field/releases) to download a specific version.
+
 ## License
 
 GPL-2.0-or-later, same as Drupal core.
@@ -291,5 +307,6 @@ GPL-2.0-or-later, same as Drupal core.
 ## Links
 
 - **Repository:** [https://github.com/Mmitekk/code_block_field](https://github.com/Mmitekk/code_block_field)
+- **Releases:** [https://github.com/Mmitekk/code_block_field/releases](https://github.com/Mmitekk/code_block_field/releases)
 - **Issues:** [https://github.com/Mmitekk/code_block_field/issues](https://github.com/Mmitekk/code_block_field/issues)
 - **Документация на русском:** [README.md](./README.md)
