@@ -287,6 +287,58 @@ class InlineEditController extends ControllerBase {
         try {
           $parent = $entity->getParentEntity();
           if ($parent) {
+            // FORCE a new revision on the paragraph. Without this, on
+            // sites where the paragraph type has "Create new revision"
+            // DISABLED in its settings, Paragraphs module will overwrite
+            // the same revision in place — which means the parent's
+            // target_revision_id does not change, and the inline edit
+            // is invisible after page reload. setNewRevision(TRUE)
+            // forces Paragraphs to create a fresh revision regardless
+            // of the paragraph type's default settings.
+            if (method_exists($entity, 'setNewRevision')) {
+              $entity->setNewRevision(TRUE);
+            }
+
+            // If the paragraph type has a revision log field, set it
+            // to a sensible message so the revision history is useful.
+            $entity_type_def = $entity->getEntityType();
+            if ($entity_type_def && $entity_type_def->isRevisionable()) {
+              $revision_log_key = $entity_type_def->getRevisionMetadataKey('revision_log') ?: 'revision_log';
+              if ($entity->hasField($revision_log_key)) {
+                $entity->set($revision_log_key, t('Inline edit (%date)', ['%date' => date('Y-m-d H:i:s')]));
+              }
+              // Set revision author to the current user.
+              if (method_exists($entity, 'setRevisionUserId')) {
+                $entity->setRevisionUserId($this->currentUser()->id());
+              }
+              elseif ($entity->hasField('revision_uid')) {
+                $entity->set('revision_uid', $this->currentUser()->id());
+              }
+            }
+
+            // Also force a new revision on the parent if it's
+            // revisionable. This is required for nodes that have
+            // "Create new revision" disabled — without it, the parent
+            // save re-uses the old revision and Paragraphs module may
+            // not propagate the new paragraph revision to the parent's
+            // reference.
+            if ($parent instanceof \Drupal\Core\Entity\RevisionableInterface) {
+              $parent_type_def = $parent->getEntityType();
+              if ($parent_type_def && $parent_type_def->isRevisionable()) {
+                if (method_exists($parent, 'setNewRevision')) {
+                  $parent->setNewRevision(TRUE);
+                }
+                if (method_exists($parent, 'setRevisionUserId')) {
+                  $parent->setRevisionUserId($this->currentUser()->id());
+                }
+                // Set revision log on the parent too.
+                $parent_revision_log_key = $parent_type_def->getRevisionMetadataKey('revision_log') ?: 'revision_log';
+                if ($parent->hasField($parent_revision_log_key)) {
+                  $parent->set($parent_revision_log_key, t('Inline edit (%date)', ['%date' => date('Y-m-d H:i:s')]));
+                }
+              }
+            }
+
             // Mark the paragraph as needing save so Paragraphs module
             // will save it (with a new revision if applicable) and
             // update the parent's reference when we save the parent.
@@ -294,11 +346,12 @@ class InlineEditController extends ControllerBase {
             $parent->save();
             $saved_through_parent = TRUE;
 
-            \Drupal::logger('code_block_field')->debug('Inline save: saved paragraph @id through parent @ptype/@pid (new revision @rid)', [
+            \Drupal::logger('code_block_field')->debug('Inline save: saved paragraph @id (rev @rid) through parent @ptype/@pid (parent rev @prid)', [
               '@id' => $entity->id(),
+              '@rid' => method_exists($entity, 'getRevisionId') ? $entity->getRevisionId() : '?',
               '@ptype' => $parent->getEntityTypeId(),
               '@pid' => $parent->id(),
-              '@rid' => method_exists($entity, 'getRevisionId') ? $entity->getRevisionId() : '?',
+              '@prid' => method_exists($parent, 'getRevisionId') ? $parent->getRevisionId() : '?',
             ]);
           }
         } catch (\Throwable $parent_e) {

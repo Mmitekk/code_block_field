@@ -5,6 +5,48 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.1] — 2026-07-02
+
+### Fixed
+
+- **Inline edits still not visible after page reload even with 1.4.0.**
+  The watchdog log showed `revision_id=` (empty) — meaning Paragraphs
+  module was NOT creating a new revision when saving, even though
+  `setNeedsSave(TRUE)` was called. Without a new revision, the parent's
+  `target_revision_id` does not change, and Drupal keeps serving the
+  old revision.
+
+  Root cause: on this site, the paragraph type's "Create new revision"
+  option is DISABLED in its settings (`/admin/structure/paragraphs_type/...`).
+  When that option is off, Paragraphs module overwrites the same
+  revision in place — no new revision is created, no reference update
+  happens, the inline edit is invisible.
+
+  Fix: the controller now **forces** a new revision on both the
+  paragraph AND the parent entity (if revisionable) before saving,
+  regardless of the type's default "Create new revision" setting:
+
+  - `$paragraph->setNewRevision(TRUE)` — forces a new paragraph
+    revision even when the paragraph type has it disabled.
+  - `$parent->setNewRevision(TRUE)` — forces a new parent revision
+    (e.g. node revision) so the parent's reference to the paragraph
+    is properly updated.
+  - Both entities get a revision log message
+    `Inline edit (YYYY-MM-DD HH:MM:SS)` and the current user as
+    revision author.
+
+  The watchdog log now reports both the paragraph revision ID and
+  the parent revision ID, so you can verify that new revisions were
+  actually created.
+
+### Notes
+
+- If you don't want inline edits to create revisions, you can disable
+  this behaviour by removing the `setNewRevision` calls in
+  `InlineEditController::save()`. But without revisions, Paragraphs
+  module will NOT update the parent's reference and inline edits will
+  be invisible — this is a Paragraphs module limitation, not ours.
+
 ## [1.4.0] — 2026-07-02
 
 ### Fixed
@@ -644,6 +686,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with installation, configuration, usage, structure, and customisation
   instructions.
 
+[1.4.1]: https://github.com/Mmitekk/code_block_field/releases/tag/1.4.1
 [1.4.0]: https://github.com/Mmitekk/code_block_field/releases/tag/1.4.0
 [1.3.5]: https://github.com/Mmitekk/code_block_field/releases/tag/1.3.5
 [1.3.4]: https://github.com/Mmitekk/code_block_field/releases/tag/1.3.4
