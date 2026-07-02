@@ -99,3 +99,18 @@ function code_block_field_update_8102(): void {
     ->save();
   \Drupal::messenger()->addStatus(t('HTML-фильтрация и авто-присвоение data-cbf-asset в Code Block Field отключены по умолчанию. Содержимое поля теперь сохраняется и рендерится как есть, без какой-либо обработки. Если нужно включить эти опции — это можно сделать на странице /admin/config/content/code-block-field.'));
 }
+
+/**
+ * Update 8103: включаем авто-присвоение data-cbf-asset обратно.
+ *
+ * В 1.3.6 auto_assign_asset_keys был отключён из-за проблем с DOMDocument.
+ * В 1.4.5 ProcessImages переписан на regex (без DOMDocument), и
+ * авто-присвоение снова безопасно. Оно необходимо для того, чтобы
+ * inline-редактор мог редактировать изображения — без data-cbf-asset
+ * картинки не распознаются как редактируемые.
+ */
+function code_block_field_update_8103(): void {
+  $config = \Drupal::configFactory()->getEditable('code_block_field.settings');
+  $config->set('auto_assign_asset_keys', TRUE)->save();
+  \Drupal::messenger()->addStatus(t('Авто-присвоение data-cbf-asset включено обратно. Теперь все изображения в блоках Code Block будут автоматически получать уникальный ключ при сохранении, что позволяет редактировать их через inline-редактор.'));
+}

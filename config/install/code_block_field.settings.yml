@@ -7,7 +7,7 @@ shadow_mode: 'open'
 expose_edit_button: true
 create_revisions: false
 revision_log_message: 'Inline edit (%date)'
-auto_assign_asset_keys: false
+auto_assign_asset_keys: true
 color_toolbar_bg: '#1e1e2e'
 color_toolbar_accent: '#ff8a3d'
 color_edit_outline: '#ff8a3d'

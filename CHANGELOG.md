@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.5] — 2026-07-02
+
+### Fixed
+
+- **Images could not be edited/replaced/resized in the inline editor.**
+  Root cause: `auto_assign_asset_keys` was disabled in 1.3.6 (and
+  forced off by update 8102). Without it, `<img>` tags never received
+  the `data-cbf-asset` attribute, so the inline editor's image click
+  handler never fired and images were not editable.
+
+  Re-enabled `auto_assign_asset_keys` in `config/install` (default:
+  `true`) and added update 8103 to turn it back on for existing
+  installations. The `ProcessImages::process()` class (which does the
+  actual auto-assignment) was already rewritten on regex in 1.2.5, so
+  it does NOT use DOMDocument and does NOT mangle SVG attributes.
+
+  The auto-assignment is also called in `InlineEditController::save()`
+  so that images edited through the inline editor get their
+  `data-cbf-asset` keys on save, making them editable on the next
+  page load.
+
+### Added
+
+- **Background-image editing.** Elements with `background-image: url(...)`
+  in their inline `style` attribute are now editable in the inline
+  editor. When edit mode is on, such elements get an orange dashed
+  outline and a small "✎ BG" badge. Clicking the element opens a
+  prompt where the user can paste a new image URL. The URL is replaced
+  in the `style` attribute and the change is saved with the next
+  "Save" click.
+
+  This works for both `background-image: url(...)` and the shorthand
+  `background: ... url(...) ...` syntax.
+
 ## [1.4.4] — 2026-07-02
 
 ### Fixed
@@ -793,6 +827,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with installation, configuration, usage, structure, and customisation
   instructions.
 
+[1.4.5]: https://github.com/Mmitekk/code_block_field/releases/tag/1.4.5
 [1.4.4]: https://github.com/Mmitekk/code_block_field/releases/tag/1.4.4
 [1.4.3]: https://github.com/Mmitekk/code_block_field/releases/tag/1.4.3
 [1.4.2]: https://github.com/Mmitekk/code_block_field/releases/tag/1.4.2

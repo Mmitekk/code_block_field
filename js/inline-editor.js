@@ -340,6 +340,30 @@
     .cbf-insert-img-btn:hover {
       transform: scale(1.1);
     }
+
+    /* Background-image editing indicator */
+    .cbf-editable-bg-image {
+      cursor: pointer !important;
+      outline: 2px dashed rgba(255, 138, 61, 0.55);
+      outline-offset: 2px;
+      transition: outline-color 0.15s ease;
+    }
+    .cbf-editable-bg-image:hover {
+      outline-color: #ff8a3d;
+    }
+    .cbf-editable-bg-image::after {
+      content: "✎ BG";
+      position: absolute;
+      top: 2px;
+      right: 2px;
+      background: var(--cbf-edit-outline, #ff8a3d);
+      color: #fff;
+      font: 10px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      padding: 1px 5px;
+      border-radius: 3px;
+      pointer-events: none;
+      z-index: 10;
+    }
   `;
 
   function injectShadowStyles(root) {
@@ -411,6 +435,33 @@
       }
       img.dataset.cbfOverlayAttached = '1';
       attachImageEditing(host, img, { noReplace: true });
+    });
+
+    // Background-image editing: find elements with background-image:url(...)
+    // in their inline style attribute and make them clickable to replace
+    // the background image.
+    root.querySelectorAll('[style*="background-image"]'), root.querySelectorAll('[style*="background:"]').forEach(function (el) {
+      if (el.dataset.cbfBgImageAttached) {
+        return;
+      }
+      var style = el.getAttribute('style') || '';
+      if (style.indexOf('url(') === -1) {
+        return;
+      }
+      el.dataset.cbfBgImageAttached = '1';
+      el.classList.add('cbf-editable-bg-image');
+      el.addEventListener('click', function (e) {
+        if (!state.active) {
+          return;
+        }
+        // Only trigger if the user clicks directly on this element (not a child).
+        if (e.target !== el) {
+          return;
+        }
+        e.preventDefault();
+        e.stopPropagation();
+        openBackgroundImagePicker(host, el);
+      });
     });
 
     // Link editor handles.
@@ -493,6 +544,11 @@
       delete img.dataset.cbfOverlayAttached;
       img.classList.remove('cbf-editable-image');
       img.classList.remove('cbf-img-resizing');
+    });
+    // Remove background-image editing classes.
+    root.querySelectorAll('[data-cbf-bg-image-attached]').forEach(function (el) {
+      delete el.dataset.cbfBgImageAttached;
+      el.classList.remove('cbf-editable-bg-image');
     });
     // Remove image resize handles.
     root.querySelectorAll('.cbf-img-resize-handle').forEach(function (h) {
@@ -1469,6 +1525,53 @@
     });
   }
 
+  // -- Background-image picker -------------------------------------------------
+
+  /**
+   * Opens a simple prompt to replace the background-image URL of an
+   * element. The user can either paste a new URL or upload a file
+   * through the standard image picker (which returns a URL).
+   *
+   * For simplicity, this uses window.prompt() for the URL input.
+   * A future version could open the Drupal modal file picker.
+   */
+  function openBackgroundImagePicker(host, el) {
+    if (!state.active) {
+      return;
+    }
+    // Extract current background-image URL from the style attribute.
+    var style = el.getAttribute('style') || '';
+    var currentUrl = '';
+    var bgMatch = style.match(/background-image:\s*url\((['"]?)([^'")]+)\1\)/i);
+    if (!bgMatch) {
+      bgMatch = style.match(/background:\s*[^;]*url\((['"]?)([^'")]+)\1\)/i);
+    }
+    if (bgMatch) {
+      currentUrl = bgMatch[2];
+    }
+
+    // Ask the user for the new URL.
+    var newUrl = window.prompt(Drupal.t('URL фонового изображения (вставьте ссылку или загрузите файл через медиа-библиотеку Drupal и вставьте URL):'), currentUrl);
+    if (!newUrl || newUrl === currentUrl) {
+      return;
+    }
+
+    // Replace the URL in the style attribute.
+    if (bgMatch) {
+      var quote = bgMatch[1] || '';
+      var oldFull = bgMatch[0];
+      var newFull = oldFull.replace(currentUrl, newUrl);
+      style = style.replace(oldFull, newFull);
+      el.setAttribute('style', style);
+    }
+    else {
+      // No existing background-image — add one.
+      el.style.backgroundImage = 'url(' + newUrl + ')';
+    }
+
+    markDirty(host);
+  }
+
   // -- Link picker ------------------------------------------------------------
 
   function openLinkPicker(host, a) {
@@ -1538,6 +1641,10 @@
     });
     clone.querySelectorAll('.cbf-editable-link').forEach(function (el) {
       el.classList.remove('cbf-editable-link');
+    });
+    // Remove background-image editing class.
+    clone.querySelectorAll('.cbf-editable-bg-image').forEach(function (el) {
+      el.classList.remove('cbf-editable-bg-image');
     });
     // Remove resize handles (they are siblings of the img, not children).
     clone.querySelectorAll('.cbf-img-resize-handle').forEach(function (h) {

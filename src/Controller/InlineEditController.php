@@ -201,12 +201,21 @@ class InlineEditController extends ControllerBase {
 
     $html = (string) ($payload['html'] ?? $field[$delta]->html);
 
-    // IMPORTANT: As of 1.3.0, we do NOT filter the HTML or auto-assign
-    // data-cbf-asset attributes here. Both operations were causing HTML
-    // to be mangled (SVG attributes lowercased, tags self-closed, etc.)
-    // on some sites. The field now stores whatever HTML the editor sent,
-    // verbatim. File usage for known assets is still tracked via
-    // hook_entity_presave().
+    // Auto-assign data-cbf-asset to any <img> that doesn't have one.
+    // This is REQUIRED for the inline editor to recognise images as
+    // editable on subsequent page loads. ProcessImages uses a regex
+    // (not DOMDocument) so SVG attributes are preserved.
+    $config = $this->config('code_block_field.settings');
+    if ((bool) $config->get('auto_assign_asset_keys') && $html !== '') {
+      $assets_for_processing = is_array($payload['assets'] ?? NULL) ? $payload['assets'] : [];
+      $html = \Drupal\code_block_field\ProcessImages::process(
+        $html,
+        $assets_for_processing,
+        $entity
+      );
+      $payload['assets'] = $assets_for_processing;
+    }
+
     $filtered_html = $html;
 
     $field[$delta]->html = $filtered_html;

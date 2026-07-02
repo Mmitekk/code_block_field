@@ -97,15 +97,39 @@ function code_block_field_entity_presave(\Drupal\Core\Entity\EntityInterface $en
   if (!$entity instanceof \Drupal\Core\Entity\FieldableEntityInterface) {
     return;
   }
+  $config = \Drupal::config('code_block_field.settings');
+  $auto_assign = (bool) $config->get('auto_assign_asset_keys');
   foreach ($entity->getFields() as $field_name => $fieldItemList) {
     $definition = $fieldItemList->getFieldDefinition();
     if ($definition->getType() !== 'code_block') {
       continue;
     }
     foreach ($fieldItemList as $delta => $item) {
-      // Register file usage for all known assets. We do NOT modify the
-      // HTML in any way — the field stores exactly what the author
-      // entered.
+      // Auto-assign data-cbf-asset to <img> tags that don't have one.
+      // This is REQUIRED for the inline editor to recognise images as
+      // editable — without data-cbf-asset, the inline editor's image
+      // click handler never fires and the user cannot replace/resize/
+      // edit-alt on the image.
+      //
+      // ProcessImages::process() uses a regex (not DOMDocument) so it
+      // does NOT mangle the rest of the HTML — SVG attributes like
+      // viewBox are preserved.
+      if ($auto_assign && !empty($item->html)) {
+        $assets = is_array($item->assets) ? $item->assets : [];
+        $new_html = \Drupal\code_block_field\ProcessImages::process(
+          (string) $item->html,
+          $assets,
+          $entity
+        );
+        if ($new_html !== $item->html) {
+          $item->html = $new_html;
+        }
+        if ($assets !== (is_array($item->assets) ? $item->assets : [])) {
+          $item->assets = $assets;
+        }
+      }
+
+      // Register file usage for all known assets.
       $assets = is_array($item->assets) ? $item->assets : [];
       foreach ($assets as $asset) {
         $fid = $asset['fid'] ?? 0;
