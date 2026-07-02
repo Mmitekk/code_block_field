@@ -5,6 +5,53 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.2] — 2026-07-02
+
+### Fixed
+
+- **Reverted to the simplest possible save logic — back to what 1.0.0
+  did.** The complex revision-handling code that was added in 1.3.1 –
+  1.4.1 (save parent too, setNeedsSave, setNewRevision, revision log,
+  revision user id) created more problems than it solved. On sites
+  where the paragraph type has "Create new revision" disabled, the
+  revision_id ended up empty after save, the parent's
+  target_revision_id never updated, and the inline edit was invisible
+  after page reload.
+
+  The save logic is now exactly one line: `$entity->save()`.
+
+  This works because:
+  - For non-revisionable entities, it just updates the row.
+  - For revisionable entities with "create new revision" DISABLED
+    (the default for paragraphs), it updates the CURRENT revision in
+    place. The parent's reference (target_id, target_revision_id)
+    still points to the same revision, but that revision's fields are
+    now updated — so when Drupal renders the parent, it loads the
+    same revision and sees the new field values.
+  - For revisionable entities with "create new revision" ENABLED,
+    Paragraphs module's hook_entity_presave creates a new revision
+    automatically. We don't need to do anything special.
+
+  After the save, we still explicitly invalidate cache tags for both
+  the entity and its parent (if any) — this is the only "extra" thing
+  we do, and it's necessary so Drupal rebuilds the rendered output on
+  the next page load.
+
+### Removed
+
+- All revision-handling code from 1.3.1 – 1.4.1:
+  - `getParentEntity()` + `$parent->save()`
+  - `setNeedsSave(TRUE)`
+  - `setNewRevision(TRUE)` on paragraph and parent
+  - Revision log message and revision user id setting
+  - `saved_through_parent` flag in the JSON response
+
+  The `create_revisions` setting in the module config still exists
+  (for forward compatibility) but no longer has any effect — we
+  never create revisions explicitly. If the entity type is configured
+  to create new revisions by default, Paragraphs/core will do it; if
+  not, the current revision is updated in place.
+
 ## [1.4.1] — 2026-07-02
 
 ### Fixed
@@ -686,6 +733,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with installation, configuration, usage, structure, and customisation
   instructions.
 
+[1.4.2]: https://github.com/Mmitekk/code_block_field/releases/tag/1.4.2
 [1.4.1]: https://github.com/Mmitekk/code_block_field/releases/tag/1.4.1
 [1.4.0]: https://github.com/Mmitekk/code_block_field/releases/tag/1.4.0
 [1.3.5]: https://github.com/Mmitekk/code_block_field/releases/tag/1.3.5

@@ -260,119 +260,60 @@ class InlineEditController extends ControllerBase {
     }
 
     try {
-      // For Paragraph entities (and any entity with a getParentEntity()
-      // method), we MUST save through the parent — NOT directly on the
-      // paragraph. Here's why:
+      // SIMPLEST POSSIBLE SAVE — no revision logic, no parent save,
+      // no setNeedsSave. Just save the entity directly. This is what
+      // the original 1.0.0 version of the module did, and inline
+      // editing worked then.
       //
-      // The Paragraphs module stores paragraph references on the parent
-      // entity as (target_id, target_revision_id). When you call
-      // $paragraph->save() directly, Paragraphs creates a NEW revision
-      // of the paragraph, but the parent's reference still points to the
-      // OLD revision. On the next page render, Drupal loads the OLD
-      // revision (the one the parent references) — so the inline edit
-      // is invisible even though the paragraph was technically saved.
+      // The complex revision-handling code that was here in 1.3.1 –
+      // 1.4.1 (save parent too, setNeedsSave, setNewRevision, etc.)
+      // created more problems than it solved on sites where the
+      // paragraph type or node type has revisions disabled. The
+      // revision_id ended up empty, the parent's target_revision_id
+      // never updated, and the inline edit was invisible after page
+      // reload.
       //
-      // The correct flow is:
-      //   1. Modify the paragraph's fields (already done above).
-      //   2. Mark the paragraph as needing save via setNeedsSave(TRUE).
-      //   3. Save the PARENT — Paragraphs module's hook_entity_presave
-      //      will detect the needsSave flag, save the paragraph with a
-      //      new revision, AND update the parent's target_revision_id
-      //      to point to the new revision.
+      // Direct $entity->save() works because:
+      // - For non-revisionable entities, it just updates the row.
+      // - For revisionable entities with "create new revision"
+      //   DISABLED (the default for paragraphs), it updates the
+      //   CURRENT revision in place. The parent's reference
+      //   (target_id, target_revision_id) still points to the same
+      //   revision, but that revision's fields are now updated —
+      //   so when Drupal renders the parent, it loads the same
+      //   revision and sees the new field values.
+      // - For revisionable entities with "create new revision"
+      //   ENABLED, Paragraphs module's hook_entity_presave will
+      //   create a new revision automatically. We don't need to do
+      //   anything special.
       //
-      // For non-paragraph entities (nodes, block_content, taxonomy_term
-      // with the code_block field directly), we save the entity directly.
-      $saved_through_parent = FALSE;
-      if (method_exists($entity, 'getParentEntity') && method_exists($entity, 'setNeedsSave')) {
-        try {
-          $parent = $entity->getParentEntity();
-          if ($parent) {
-            // FORCE a new revision on the paragraph. Without this, on
-            // sites where the paragraph type has "Create new revision"
-            // DISABLED in its settings, Paragraphs module will overwrite
-            // the same revision in place — which means the parent's
-            // target_revision_id does not change, and the inline edit
-            // is invisible after page reload. setNewRevision(TRUE)
-            // forces Paragraphs to create a fresh revision regardless
-            // of the paragraph type's default settings.
-            if (method_exists($entity, 'setNewRevision')) {
-              $entity->setNewRevision(TRUE);
-            }
-
-            // If the paragraph type has a revision log field, set it
-            // to a sensible message so the revision history is useful.
-            $entity_type_def = $entity->getEntityType();
-            if ($entity_type_def && $entity_type_def->isRevisionable()) {
-              $revision_log_key = $entity_type_def->getRevisionMetadataKey('revision_log') ?: 'revision_log';
-              if ($entity->hasField($revision_log_key)) {
-                $entity->set($revision_log_key, t('Inline edit (%date)', ['%date' => date('Y-m-d H:i:s')]));
-              }
-              // Set revision author to the current user.
-              if (method_exists($entity, 'setRevisionUserId')) {
-                $entity->setRevisionUserId($this->currentUser()->id());
-              }
-              elseif ($entity->hasField('revision_uid')) {
-                $entity->set('revision_uid', $this->currentUser()->id());
-              }
-            }
-
-            // Also force a new revision on the parent if it's
-            // revisionable. This is required for nodes that have
-            // "Create new revision" disabled — without it, the parent
-            // save re-uses the old revision and Paragraphs module may
-            // not propagate the new paragraph revision to the parent's
-            // reference.
-            if ($parent instanceof \Drupal\Core\Entity\RevisionableInterface) {
-              $parent_type_def = $parent->getEntityType();
-              if ($parent_type_def && $parent_type_def->isRevisionable()) {
-                if (method_exists($parent, 'setNewRevision')) {
-                  $parent->setNewRevision(TRUE);
-                }
-                if (method_exists($parent, 'setRevisionUserId')) {
-                  $parent->setRevisionUserId($this->currentUser()->id());
-                }
-                // Set revision log on the parent too.
-                $parent_revision_log_key = $parent_type_def->getRevisionMetadataKey('revision_log') ?: 'revision_log';
-                if ($parent->hasField($parent_revision_log_key)) {
-                  $parent->set($parent_revision_log_key, t('Inline edit (%date)', ['%date' => date('Y-m-d H:i:s')]));
-                }
-              }
-            }
-
-            // Mark the paragraph as needing save so Paragraphs module
-            // will save it (with a new revision if applicable) and
-            // update the parent's reference when we save the parent.
-            $entity->setNeedsSave(TRUE);
-            $parent->save();
-            $saved_through_parent = TRUE;
-
-            \Drupal::logger('code_block_field')->debug('Inline save: saved paragraph @id (rev @rid) through parent @ptype/@pid (parent rev @prid)', [
-              '@id' => $entity->id(),
-              '@rid' => method_exists($entity, 'getRevisionId') ? $entity->getRevisionId() : '?',
-              '@ptype' => $parent->getEntityTypeId(),
-              '@pid' => $parent->id(),
-              '@prid' => method_exists($parent, 'getRevisionId') ? $parent->getRevisionId() : '?',
-            ]);
-          }
-        } catch (\Throwable $parent_e) {
-          // Parent save failed — fall back to direct save.
-          \Drupal::logger('code_block_field')->warning('Inline save: parent save failed (@msg), falling back to direct paragraph save', [
-            '@msg' => $parent_e->getMessage(),
-          ]);
-        }
-      }
-
-      if (!$saved_through_parent) {
-        // Direct save for non-paragraph entities, or as a fallback when
-        // parent save failed.
-        $entity->save();
-      }
+      // After the save, we explicitly invalidate cache tags so the
+      // rendered output is rebuilt on the next page load.
+      $entity->save();
     } catch (\Throwable $e) {
       return new JsonResponse(['error' => 'Save failed: ' . $e->getMessage()], 500);
     }
 
+    // Explicitly invalidate cache tags for the saved entity AND its
+    // parent (if any). Without this, Drupal may serve a cached version
+    // of the rendered page that was built before the inline edit.
+    $tags_to_invalidate = $entity->getCacheTags();
+    $parent_info = 'none';
+    if (method_exists($entity, 'getParentEntity')) {
+      try {
+        $parent = $entity->getParentEntity();
+        if ($parent) {
+          $tags_to_invalidate = array_merge($tags_to_invalidate, $parent->getCacheTags());
+          $parent_info = $parent->getEntityTypeId() . '/' . $parent->id();
+        }
+      } catch (\Throwable $parent_e) {
+        // Ignore — best-effort.
+      }
+    }
+    \Drupal::service('cache_tags.invalidator')->invalidateTags($tags_to_invalidate);
+
     // Log the successful save for debugging.
-    \Drupal::logger('code_block_field')->debug('Inline save: entity_type=@type, entity_id=@id, revision_id=@rid, field=@field, delta=@delta, html_length=@len, html_preview=@preview, saved_through_parent=@stp', [
+    \Drupal::logger('code_block_field')->debug('Inline save: entity_type=@type, entity_id=@id, revision_id=@rid, field=@field, delta=@delta, html_length=@len, html_preview=@preview, parent=@parent, cache_tags=@tags', [
       '@type' => $entity->getEntityTypeId(),
       '@id' => $entity->id(),
       '@rid' => method_exists($entity, 'getRevisionId') ? $entity->getRevisionId() : '?',
@@ -380,7 +321,8 @@ class InlineEditController extends ControllerBase {
       '@delta' => $delta,
       '@len' => strlen($filtered_html),
       '@preview' => substr($filtered_html, 0, 200),
-      '@stp' => $saved_through_parent ? 'yes' : 'no',
+      '@parent' => $parent_info,
+      '@tags' => implode(',', $tags_to_invalidate),
     ]);
 
     $response_data = [
@@ -394,7 +336,7 @@ class InlineEditController extends ControllerBase {
       'html_length' => strlen($filtered_html),
       'html_preview' => substr($filtered_html, 0, 200),
       'assets' => $reconciled,
-      'saved_through_parent' => $saved_through_parent,
+      'cache_tags_invalidated' => $tags_to_invalidate,
     ];
     $response = new CacheableJsonResponse($response_data);
     $response->addCacheableDependency($entity);
