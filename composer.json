@@ -42,7 +42,7 @@
   "extra": {
     "drupal": {
       "packageName": "mmitekk/code_block_field",
-      "version": "1.4.11",
+      "version": "1.4.12",
       "security-coverage": {
         "status": "not-covered",
         "message": "Покрытие безопасности не проверяется для этого модуля / Security coverage is not checked for this module."

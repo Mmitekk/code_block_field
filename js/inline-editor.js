@@ -1634,36 +1634,54 @@
         return;
       }
 
-      fetch(uploadUrl, {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: {
-          'X-CSRF-Token': drupalSettings.code_block_field.csrf_token,
-        },
-        body: formData,
-      })
-        .then(function (r) { return r.json(); })
-        .then(function (data) {
-          if (data.success) {
-            uploadedFile.fid = data.fid;
-            uploadedFile.url = data.url;
-            uploadedFile.alt = altInput.value;
-            statusDiv.textContent = '✓ Загружено: ' + (data.filename || '');
-            statusDiv.style.color = '#28a745';
-            applyBtn.disabled = false;
-            // Update preview with server URL.
-            previewDiv.innerHTML = '<img src="' + data.url + '" style="max-width:200px;max-height:200px;border-radius:8px;" />';
-          } else {
-            statusDiv.textContent = 'Ошибка: ' + (data.error || 'неизвестная');
-            statusDiv.style.color = 'red';
-            applyBtn.disabled = true;
-          }
-        })
-        .catch(function (err) {
-          statusDiv.textContent = 'Ошибка загрузки: ' + err.message;
+      // Use XMLHttpRequest instead of fetch — some servers (Lighttpd,
+      // older Apache) require Content-Length header on POST requests
+      // and return HTTP 411 "Length Required" when it's missing.
+      // fetch() with FormData doesn't always set Content-Length on
+      // all browsers/servers, but XHR does.
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', uploadUrl, true);
+      xhr.withCredentials = true;
+      xhr.setRequestHeader('X-CSRF-Token', drupalSettings.code_block_field.csrf_token);
+      xhr.onreadystatechange = function () {
+        if (xhr.readyState !== 4) {
+          return;
+        }
+        var status = xhr.status;
+        var responseText = xhr.responseText || '';
+        var data;
+        try {
+          data = JSON.parse(responseText);
+        } catch (e) {
+          statusDiv.textContent = 'Ошибка сервера (HTTP ' + status + '): ' + responseText.substring(0, 200);
           statusDiv.style.color = 'red';
           applyBtn.disabled = true;
-        });
+          // eslint-disable-next-line no-console
+          console.error('Code Block Field: upload response not JSON', { status: status, response: responseText.substring(0, 500) });
+          return;
+        }
+        if (status >= 200 && status < 300 && data.success) {
+          uploadedFile.fid = data.fid;
+          uploadedFile.url = data.url;
+          uploadedFile.alt = altInput.value;
+          statusDiv.textContent = '✓ Загружено: ' + (data.filename || '');
+          statusDiv.style.color = '#28a745';
+          applyBtn.disabled = false;
+          previewDiv.innerHTML = '<img src="' + data.url + '" style="max-width:200px;max-height:200px;border-radius:8px;" />';
+        } else {
+          statusDiv.textContent = 'Ошибка: ' + (data.error || 'HTTP ' + status);
+          statusDiv.style.color = 'red';
+          applyBtn.disabled = true;
+          // eslint-disable-next-line no-console
+          console.error('Code Block Field: upload failed', { status: status, data: data });
+        }
+      };
+      xhr.onerror = function () {
+        statusDiv.textContent = 'Ошибка сети при загрузке файла';
+        statusDiv.style.color = 'red';
+        applyBtn.disabled = true;
+      };
+      xhr.send(formData);
     });
 
     // Apply button — update the image in the DOM.
