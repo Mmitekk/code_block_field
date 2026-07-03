@@ -1549,39 +1549,161 @@
     if (!state.active) {
       return;
     }
-    const assetKey = img.getAttribute('data-cbf-asset');
+    var assetKey = img.getAttribute('data-cbf-asset');
     if (!assetKey) {
       return;
     }
-    const url = Drupal.url('admin/code-block-field/image-picker/' + host.getAttribute('data-cbf-entity-type') + '/' + host.getAttribute('data-cbf-entity-id') + '/' + host.getAttribute('data-cbf-field-name') + '/' + host.getAttribute('data-cbf-delta') + '/' + encodeURIComponent(assetKey));
-    const ajax = Drupal.ajax({
-      url: url,
-      dialogType: 'modal',
-      dialog: { width: 600, title: Drupal.t('Заменить изображение') },
-    });
-    ajax.execute();
-    // Listen for the global "image picked" event sent by the modal form.
-    document.addEventListener('codeBlockFieldImagePicked', function onPick(ev) {
-      document.removeEventListener('codeBlockFieldImagePicked', onPick);
-      const payload = ev.detail || ev.data || null;
-      if (!payload) {
+
+    var endpoints = (drupalSettings && drupalSettings.code_block_field && drupalSettings.code_block_field.endpoints) || {};
+    var entityType = host.getAttribute('data-cbf-entity-type');
+    var entityId = host.getAttribute('data-cbf-entity-id');
+    var currentSrc = img.getAttribute('src') || '';
+    var currentAlt = img.getAttribute('alt') || '';
+
+    // Build a custom modal — NO Drupal AJAX, NO managed_file, just
+    // pure HTML/CSS/JS. The file is uploaded immediately when selected,
+    // preview is shown, and "Apply" confirms the change.
+    var overlay = document.createElement('div');
+    overlay.className = 'cbf-image-modal-overlay';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:99999;display:flex;align-items:center;justify-content:center;';
+
+    var modal = document.createElement('div');
+    modal.style.cssText = 'background:#fff;border-radius:12px;padding:24px;max-width:500px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;';
+
+    var uploadedFile = { fid: 0, url: '', alt: '' };
+
+    modal.innerHTML = ''
+      + '<h3 style="margin:0 0 16px;font-size:20px;color:#1e1e2e;">Заменить изображение</h3>'
+      + '<div id="cbf-img-preview" style="margin-bottom:16px;text-align:center;min-height:100px;display:flex;align-items:center;justify-content:center;background:#f5f5f5;border-radius:8px;padding:12px;">'
+      + (currentSrc ? '<img src="' + currentSrc + '" style="max-width:200px;max-height:200px;border-radius:8px;" />' : '<span style="color:#999;">Нет изображения</span>')
+      + '</div>'
+      + '<div style="margin-bottom:16px;">'
+      + '  <label style="display:block;font-weight:600;margin-bottom:6px;font-size:14px;">Выберите новый файл:</label>'
+      + '  <input type="file" accept="image/*" id="cbf-img-file" style="width:100%;padding:8px;border:2px dashed #ddd;border-radius:8px;font-size:14px;" />'
+      + '  <div id="cbf-img-upload-status" style="margin-top:8px;font-size:13px;color:#666;"></div>'
+      + '</div>'
+      + '<div style="margin-bottom:20px;">'
+      + '  <label style="display:block;font-weight:600;margin-bottom:6px;font-size:14px;">Alt-текст:</label>'
+      + '  <input type="text" id="cbf-img-alt" value="' + currentAlt.replace(/"/g, '&quot;') + '" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;" placeholder="Описание для скринридеров" />'
+      + '</div>'
+      + '<div style="display:flex;gap:12px;justify-content:flex-end;">'
+      + '  <button type="button" id="cbf-img-cancel" style="padding:10px 20px;border:1px solid #ddd;background:#fff;border-radius:8px;cursor:pointer;font-size:14px;">Отмена</button>'
+      + '  <button type="button" id="cbf-img-apply" style="padding:10px 28px;background:#ff8a3d;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;">Применить</button>'
+      + '</div>';
+
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    var fileInput = modal.querySelector('#cbf-img-file');
+    var statusDiv = modal.querySelector('#cbf-img-upload-status');
+    var previewDiv = modal.querySelector('#cbf-img-preview');
+    var altInput = modal.querySelector('#cbf-img-alt');
+    var applyBtn = modal.querySelector('#cbf-img-apply');
+    var cancelBtn = modal.querySelector('#cbf-img-cancel');
+
+    // File upload — immediately when file is selected.
+    fileInput.addEventListener('change', function () {
+      var selectedFile = fileInput.files[0];
+      if (!selectedFile) {
         return;
       }
-      img.setAttribute('src', payload.url);
-      if (payload.alt) {
-        img.setAttribute('alt', payload.alt);
+
+      statusDiv.textContent = 'Загрузка...';
+      statusDiv.style.color = '#666';
+      applyBtn.disabled = true;
+
+      // Show local preview immediately.
+      var reader = new FileReader();
+      reader.onload = function (e) {
+        previewDiv.innerHTML = '<img src="' + e.target.result + '" style="max-width:200px;max-height:200px;border-radius:8px;" />';
+      };
+      reader.readAsDataURL(selectedFile);
+
+      // Upload via fetch to the existing endpoint.
+      var formData = new FormData();
+      formData.append('file', selectedFile);
+      formData.append('entity_type', entityType);
+      formData.append('entity_id', entityId);
+      formData.append('key', assetKey);
+      formData.append('alt', altInput.value);
+
+      var uploadUrl = endpoints.upload;
+      if (!uploadUrl) {
+        statusDiv.textContent = 'Ошибка: endpoint загрузки не настроен';
+        statusDiv.style.color = 'red';
+        return;
       }
-      // Update the registry entry’s payload so the change is captured.
-      const instanceId = getInstanceId(host);
-      const entry = window.codeBlockFieldRegistry[instanceId];
+
+      fetch(uploadUrl, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'X-CSRF-Token': drupalSettings.code_block_field.csrf_token,
+        },
+        body: formData,
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data.success) {
+            uploadedFile.fid = data.fid;
+            uploadedFile.url = data.url;
+            uploadedFile.alt = altInput.value;
+            statusDiv.textContent = '✓ Загружено: ' + (data.filename || '');
+            statusDiv.style.color = '#28a745';
+            applyBtn.disabled = false;
+            // Update preview with server URL.
+            previewDiv.innerHTML = '<img src="' + data.url + '" style="max-width:200px;max-height:200px;border-radius:8px;" />';
+          } else {
+            statusDiv.textContent = 'Ошибка: ' + (data.error || 'неизвестная');
+            statusDiv.style.color = 'red';
+            applyBtn.disabled = true;
+          }
+        })
+        .catch(function (err) {
+          statusDiv.textContent = 'Ошибка загрузки: ' + err.message;
+          statusDiv.style.color = 'red';
+          applyBtn.disabled = true;
+        });
+    });
+
+    // Apply button — update the image in the DOM.
+    applyBtn.addEventListener('click', function () {
+      var newUrl = uploadedFile.url || currentSrc;
+      var newAlt = altInput.value;
+      var newFid = uploadedFile.fid || 0;
+
+      if (newUrl) {
+        img.setAttribute('src', newUrl);
+      }
+      if (newAlt) {
+        img.setAttribute('alt', newAlt);
+      }
+
+      // Update the registry entry.
+      var instanceId = getInstanceId(host);
+      var entry = window.codeBlockFieldRegistry[instanceId];
       if (entry) {
         entry.payload.assets = entry.payload.assets || {};
-        entry.payload.assets[assetKey] = { fid: payload.fid, alt: payload.alt || '', src: payload.url };
+        entry.payload.assets[assetKey] = { fid: newFid, alt: newAlt, src: newUrl };
       }
-      // Update dirty tracking.
+
       state.dirty.add(instanceId);
       host.classList.add('cbf-host--dirty');
       updateSaveButton();
+
+      document.body.removeChild(overlay);
+    });
+
+    // Cancel button.
+    cancelBtn.addEventListener('click', function () {
+      document.body.removeChild(overlay);
+    });
+
+    // Click outside to close.
+    overlay.addEventListener('click', function (e) {
+      if (e.target === overlay) {
+        document.body.removeChild(overlay);
+      }
     });
   }
 

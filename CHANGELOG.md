@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.11] — 2026-07-03
+
+### Changed
+
+- **Completely rewrote the image replacement modal — no more Drupal
+  forms.** The old approach used Drupal's AJAX modal + `managed_file`
+  (1.4.9) or `file` element (1.4.10), both of which were confusing and
+  didn't work reliably with AJAX file uploads.
+
+  The new image picker is a **pure HTML/CSS/JS modal** built directly
+  in `inline-editor.js` — no Drupal form, no managed_file widget, no
+  AJAX form rebuilding. It works like this:
+
+  1. User double-clicks an image (or right-clicks → "Replace image")
+  2. A custom modal opens with:
+     - Preview of the current image
+     - A simple file input ("Выберите новый файл")
+     - Alt-text field (pre-filled with current alt)
+     - "Применить" (Apply) and "Отмена" (Cancel) buttons
+  3. When the user selects a file, it is **uploaded immediately** via
+     `fetch()` to the existing `/admin/code-block-field/image-upload`
+     endpoint. A local preview is shown instantly (FileReader), then
+     replaced with the server URL when the upload completes.
+  4. The status line shows "✓ Загружено: filename.png" (green) on
+     success, or the error message (red) on failure.
+  5. User clicks "Применить" — the image `src` and `alt` are updated
+     in the DOM, the block is marked dirty, and the modal closes.
+  6. User clicks "Сохранить" in the floating toolbar to persist.
+
+  No Drupal form system involved. No `managed_file`. No AJAX form
+  rebuilding. Just a file input, a fetch upload, and a button.
+
 ## [1.4.10] — 2026-07-03
 
 ### Changed
@@ -981,6 +1013,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with installation, configuration, usage, structure, and customisation
   instructions.
 
+[1.4.11]: https://github.com/Mmitekk/code_block_field/releases/tag/1.4.11
 [1.4.10]: https://github.com/Mmitekk/code_block_field/releases/tag/1.4.10
 [1.4.9]: https://github.com/Mmitekk/code_block_field/releases/tag/1.4.9
 [1.4.8]: https://github.com/Mmitekk/code_block_field/releases/tag/1.4.8
