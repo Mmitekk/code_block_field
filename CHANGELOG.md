@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.8] — 2026-07-03
+
+### Fixed
+
+- **CRITICAL: Browser was caching old JS files between releases.** The
+  `libraries.yml` file had `version: 1.0.0` for the `widget`,
+  `renderer`, and `inline_editor` libraries since the module was first
+  created. Drupal uses this version to generate cache-busting query
+  parameters for asset URLs (e.g. `inline-editor.js?v=1.0.0`). Since
+  the version never changed between releases, the browser cached the
+  old JS file and never downloaded the updated code — even after
+  `composer update` and `drush cr`.
+
+  **This was the root cause of many "didn't work after update" reports.**
+  The user was running old JS code in the browser despite having the
+  latest module version on the server.
+
+  Fixed by bumping all three library versions to `1.4.8` (matching the
+  module version). This changes the asset URLs from `?v=1.0.0` to
+  `?v=1.4.8`, forcing the browser to re-download the JS files.
+
+  **Going forward, the library version will be bumped on every release
+  to match the module version.**
+
 ## [1.4.7] — 2026-07-03
 
 ### Fixed
@@ -904,6 +928,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with installation, configuration, usage, structure, and customisation
   instructions.
 
+[1.4.8]: https://github.com/Mmitekk/code_block_field/releases/tag/1.4.8
 [1.4.7]: https://github.com/Mmitekk/code_block_field/releases/tag/1.4.7
 [1.4.6]: https://github.com/Mmitekk/code_block_field/releases/tag/1.4.6
 [1.4.5]: https://github.com/Mmitekk/code_block_field/releases/tag/1.4.5
