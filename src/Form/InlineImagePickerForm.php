@@ -12,6 +12,11 @@ use Drupal\Core\Form\FormStateInterface;
 
 /**
  * Modal form that lets the inline editor pick or upload a replacement image.
+ *
+ * Uses a simple file upload element (not managed_file) to avoid the
+ * confusing Drupal managed_file widget with its own Upload/Remove buttons.
+ * The form has exactly 3 elements: a file input, an alt-text field, and
+ * a big "Use this image" button. No clutter.
  */
 class InlineImagePickerForm extends FormBase {
 
@@ -32,25 +37,38 @@ class InlineImagePickerForm extends FormBase {
       'field_name' => $field_name,
       'delta' => $delta,
       'asset_key' => $asset_key,
+      'current_fid' => $current_fid,
     ]);
 
-    $form['fid'] = [
-      '#type' => 'managed_file',
-      '#title' => $this->t('Изображение'),
+    // Show current image preview if there is one.
+    if ($current_fid) {
+      $file = \Drupal::entityTypeManager()->getStorage('file')->load($current_fid);
+      if ($file) {
+        $url = \Drupal::service('file_url_generator')->generateAbsoluteString($file->getFileUri());
+        $form['current_preview'] = [
+          '#markup' => '<div style="margin-bottom:16px;text-align:center;">'
+            . '<div style="font-weight:bold;margin-bottom:8px;">Текущее изображение:</div>'
+            . '<img src="' . htmlspecialchars($url) . '" alt="" style="max-width:200px;max-height:200px;border-radius:8px;border:2px solid #ddd;" />'
+            . '</div>',
+        ];
+      }
+    }
+
+    $form['file'] = [
+      '#type' => 'file',
+      '#title' => $this->t('Новое изображение'),
+      '#description' => $this->t('Выберите файл для замены. Форматы: GIF, PNG, JPG, JPEG, WebP, SVG.'),
       '#upload_validators' => [
         'file_validate_extensions' => ['gif png jpg jpeg webp svg'],
-        'file_validate_isImage' => [],
       ],
-      '#upload_location' => $this->config('code_block_field.settings')->get('upload_location') ?: 'public://code-block-field',
-      '#default_value' => $current_fid ? [$current_fid] : NULL,
-      '#required' => TRUE,
+      // No #required — user can just change alt text without replacing.
     ];
 
     $form['alt'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Alt-текст'),
       '#default_value' => $current_alt,
-      '#description' => $this->t('Используется скринридерами и поисковыми системами.'),
+      '#description' => $this->t('Описание изображения для скринридеров и поисковых систем.'),
     ];
 
     $form['actions'] = [
@@ -58,11 +76,15 @@ class InlineImagePickerForm extends FormBase {
     ];
     $form['actions']['save'] = [
       '#type' => 'submit',
-      '#value' => $this->t('Использовать это изображение'),
+      '#value' => $this->t('Сохранить'),
       '#submit' => ['::submitAjax'],
       '#ajax' => [
         'callback' => '::ajaxCallback',
         'wrapper' => 'code-block-field-image-picker',
+      ],
+      '#attributes' => [
+        'class' => ['button--primary'],
+        'style' => 'font-size:16px;padding:12px 32px;',
       ],
     ];
     $form['actions']['cancel'] = [
@@ -76,6 +98,7 @@ class InlineImagePickerForm extends FormBase {
 
     $form['#prefix'] = '<div id="code-block-field-image-picker">';
     $form['#suffix'] = '</div>';
+    $form['#attached']['library'][] = 'core/drupal.ajax';
     return $form;
   }
 
@@ -87,32 +110,57 @@ class InlineImagePickerForm extends FormBase {
   }
 
   /**
-   * Ajax handler for the "Use this image" button.
+   * Ajax handler for the "Save" button.
    */
   public function submitAjax(array &$form, FormStateInterface $form_state) {
     $storage = $form_state->getStorage();
-    $fids = $form_state->getValue('fid') ?: [];
-    $fid = reset($fids);
     $response = new AjaxResponse();
-    if (!$fid) {
+
+    $asset_key = $storage['asset_key'] ?? '';
+    $entity_type = $storage['entity_type'] ?? '';
+    $entity_id = (int) ($storage['entity_id'] ?? 0);
+    $current_fid = (int) ($storage['current_fid'] ?? 0);
+    $alt = $form_state->getValue('alt') ?? '';
+
+    // Check if a new file was uploaded.
+    $validators = [
+      'file_validate_extensions' => ['gif png jpg jpeg webp svg'],
+    ];
+    $upload_location = $this->config('code_block_field.settings')->get('upload_location') ?: 'public://code-block-field';
+
+    $file = file_save_upload('file', $validators, $upload_location, 0, \Drupal\Core\File\FileSystemInterface::EXISTS_RENAME);
+
+    if ($file && is_object($file)) {
+      // New file uploaded — use it.
+      $file->setPermanent();
+      $file->save();
+      if ($entity_id) {
+        \Drupal::service('file.usage')->add($file, 'code_block_field', $entity_type, $entity_id);
+      }
+      $url = \Drupal::service('file_url_generator')->generateAbsoluteString($file->getFileUri());
+      $fid = (int) $file->id();
+    }
+    elseif ($current_fid) {
+      // No new file — keep the current one, just update alt.
+      $existing_file = \Drupal::entityTypeManager()->getStorage('file')->load($current_fid);
+      if ($existing_file) {
+        $url = \Drupal::service('file_url_generator')->generateAbsoluteString($existing_file->getFileUri());
+        $fid = $current_fid;
+      }
+      else {
+        return $response;
+      }
+    }
+    else {
+      // No file at all.
       return $response;
     }
-    /** @var \Drupal\file\FileInterface|null $file */
-    $file = \Drupal::entityTypeManager()->getStorage('file')->load($fid);
-    if (!$file) {
-      return $response;
-    }
-    $file->setPermanent();
-    $file->save();
-    if ($entity_id = (int) ($storage['entity_id'] ?? 0)) {
-      \Drupal::service('file.usage')->add($file, 'code_block_field', $storage['entity_type'], $entity_id);
-    }
-    $url = \Drupal::service('file_url_generator')->generateAbsoluteString($file->getFileUri());
+
     $payload = [
-      'asset_key' => $storage['asset_key'] ?? '',
-      'fid' => (int) $fid,
+      'asset_key' => $asset_key,
+      'fid' => $fid,
       'url' => $url,
-      'alt' => $form_state->getValue('alt'),
+      'alt' => $alt,
     ];
     $response->addCommand(new InvokeCommand(
       NULL,

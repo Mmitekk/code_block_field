@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.10] — 2026-07-03
+
+### Changed
+
+- **Simplified the image replacement modal.** The old modal used Drupal's
+  `managed_file` widget, which has its own Upload/Remove buttons that
+  were confusing — users couldn't find the "Use this image" button
+  because it was buried below the managed_file widget's own UI.
+
+  Replaced with a simple `file` upload element + a prominent
+  "Сохранить" (Save) button. The modal now has exactly 3 elements:
+  1. A preview of the current image (if one exists)
+  2. A file input to choose a new image
+  3. An alt-text field
+  4. A big "Сохранить" button + "Отмена" (Cancel) button
+
+  If the user doesn't choose a new file but changes the alt text, the
+  current image is kept and only the alt is updated.
+
 ## [1.4.9] — 2026-07-03
 
 ### Fixed
@@ -962,6 +981,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with installation, configuration, usage, structure, and customisation
   instructions.
 
+[1.4.10]: https://github.com/Mmitekk/code_block_field/releases/tag/1.4.10
 [1.4.9]: https://github.com/Mmitekk/code_block_field/releases/tag/1.4.9
 [1.4.8]: https://github.com/Mmitekk/code_block_field/releases/tag/1.4.8
 [1.4.7]: https://github.com/Mmitekk/code_block_field/releases/tag/1.4.7
