@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.7] — 2026-07-03
+
+### Fixed
+
+- **Images and links not editable on first "Edit Mode" click — needed
+  to toggle Edit Mode twice.** Two root causes found and fixed:
+
+  1. **`disableEditing()` did not reset the link attachment flag.**
+     `a.dataset.cbfLinkHandleAttached` was never cleared in
+     `disableEditing()`, so on the second `enableEditing()` call, the
+     link code saw the flag and skipped re-attaching handlers. Links
+     never worked after the first toggle. Fixed by clearing
+     `dataset.cbfLinkHandleAttached` in `disableEditing()`.
+
+  2. **No error isolation between enableEditing sections.** The text,
+     image, background-image, link, and insert-button sections of
+     `enableEditing()` were all in one big function without
+     try-catch. If ANY section threw an exception (e.g. a
+     `querySelectorAll` on an unusual DOM structure), the entire
+     function aborted silently — subsequent sections (images, links)
+     never ran. This is why images and links were missing on the first
+     click but appeared on the second (after `disableEditing` reset
+     some state). Fixed by wrapping each section in its own
+     `try-catch` with `console.error` logging.
+
+  3. **No delayed re-scan for late-loading Shadow DOM content.** If
+     the block's JavaScript injected content into the Shadow DOM after
+     `enableEditing()` ran (e.g. async image loading, dynamic
+     widgets), those elements never got editing handlers. Added a
+     200ms delayed re-scan that catches any elements missed on the
+     first pass. The re-scan is gated by dataset flags so it only
+     processes elements that haven't been attached yet — safe to call
+     multiple times.
+
 ## [1.4.6] — 2026-07-02
 
 ### Fixed
@@ -870,6 +904,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with installation, configuration, usage, structure, and customisation
   instructions.
 
+[1.4.7]: https://github.com/Mmitekk/code_block_field/releases/tag/1.4.7
 [1.4.6]: https://github.com/Mmitekk/code_block_field/releases/tag/1.4.6
 [1.4.5]: https://github.com/Mmitekk/code_block_field/releases/tag/1.4.5
 [1.4.4]: https://github.com/Mmitekk/code_block_field/releases/tag/1.4.4

@@ -392,127 +392,176 @@
     host.classList.add('cbf-host--editing');
     injectShadowStyles(root);
 
-    // Wrap editable text nodes.
-    root.querySelectorAll(TEXT_SELECTOR).forEach(function (el) {
-      if (el.matches(SKIP_TEXT_SELECTOR)) {
-        return;
-      }
-      // Skip elements that have block-level children only (no direct text).
-      const hasText = Array.from(el.childNodes).some(function (n) {
-        return n.nodeType === Node.TEXT_NODE && n.textContent.trim() !== '';
-      });
-      if (!hasText && el.tagName !== 'A') {
-        return;
-      }
-      el.setAttribute('contenteditable', 'true');
-      el.setAttribute('spellcheck', 'false');
-      el.classList.add('cbf-editable');
-      el.addEventListener('input', onEditableInput.bind(null, host));
-      el.addEventListener('focus', onEditableFocus.bind(null, host));
-      el.addEventListener('blur', onEditableBlur);
-      // Show the WYSIWYG toolbar when the user selects text inside this element.
-      el.addEventListener('mouseup', onEditableSelectionChange.bind(null, host));
-      el.addEventListener('keyup', onEditableSelectionChange.bind(null, host));
-    });
+    // Each section is wrapped in try-catch so that a failure in one
+    // section (e.g. images) does NOT prevent the next section (e.g.
+    // links) from running. This was the root cause of the "need to
+    // click Edit Mode twice" bug — an exception in one section
+    // silently aborted the entire enableEditing function.
 
-    // Listen for selection changes globally (covers keyboard selection
-    // across multiple editable elements within the same shadow root).
-    document.addEventListener('selectionchange', onSelectionChangeGlobal);
-
-    // Image overlays + resize handles + context menu + alt editor.
-    // ALL images get editing handlers — those with data-cbf-asset get
-    // full editing (replace, resize, alt, context menu), those without
-    // get limited editing (resize, alt, context menu — but no replace
-    // through file picker).
-    root.querySelectorAll('img').forEach(function (img) {
-      if (img.dataset.cbfOverlayAttached) {
-        return;
-      }
-      img.dataset.cbfOverlayAttached = '1';
-      img.classList.add('cbf-editable-image');
-      var hasAsset = img.hasAttribute('data-cbf-asset');
-      attachImageEditing(host, img, hasAsset ? {} : { noReplace: true });
-    });
-
-    // Background-image editing: find elements with background-image:url(...)
-    // or background:...url(...) in their inline style attribute.
-    // Use a single querySelectorAll with comma-separated selectors (not
-    // the JavaScript comma operator, which was a bug in 1.4.5).
-    root.querySelectorAll('[style*="background-image"], [style*="background:"]').forEach(function (el) {
-      if (el.dataset.cbfBgImageAttached) {
-        return;
-      }
-      var style = el.getAttribute('style') || '';
-      if (style.indexOf('url(') === -1) {
-        return;
-      }
-      el.dataset.cbfBgImageAttached = '1';
-      el.classList.add('cbf-editable-bg-image');
-      el.addEventListener('click', function (e) {
-        if (!state.active) {
+    // 1. Text elements → contenteditable.
+    try {
+      root.querySelectorAll(TEXT_SELECTOR).forEach(function (el) {
+        if (el.matches(SKIP_TEXT_SELECTOR)) {
           return;
         }
-        // Only trigger if the user clicks directly on this element (not a child).
-        if (e.target !== el) {
+        const hasText = Array.from(el.childNodes).some(function (n) {
+          return n.nodeType === Node.TEXT_NODE && n.textContent.trim() !== '';
+        });
+        if (!hasText && el.tagName !== 'A') {
           return;
         }
-        e.preventDefault();
-        e.stopPropagation();
-        openBackgroundImagePicker(host, el);
+        el.setAttribute('contenteditable', 'true');
+        el.setAttribute('spellcheck', 'false');
+        el.classList.add('cbf-editable');
+        el.addEventListener('input', onEditableInput.bind(null, host));
+        el.addEventListener('focus', onEditableFocus.bind(null, host));
+        el.addEventListener('blur', onEditableBlur);
+        el.addEventListener('mouseup', onEditableSelectionChange.bind(null, host));
+        el.addEventListener('keyup', onEditableSelectionChange.bind(null, host));
       });
-    });
+    } catch (e) { console.error('CBF enableEditing text:', e); }
 
-    // Link editor handles.
-    root.querySelectorAll('a').forEach(function (a) {
-      if (a.dataset.cbfLinkHandleAttached) {
+    // 2. Selection listener.
+    try {
+      document.addEventListener('selectionchange', onSelectionChangeGlobal);
+    } catch (e) { console.error('CBF enableEditing selection:', e); }
+
+    // 3. Images — ALL images get editing handlers.
+    try {
+      root.querySelectorAll('img').forEach(function (img) {
+        if (img.dataset.cbfOverlayAttached) {
+          return;
+        }
+        img.dataset.cbfOverlayAttached = '1';
+        img.classList.add('cbf-editable-image');
+        var hasAsset = img.hasAttribute('data-cbf-asset');
+        attachImageEditing(host, img, hasAsset ? {} : { noReplace: true });
+      });
+    } catch (e) { console.error('CBF enableEditing images:', e); }
+
+    // 4. Background-image elements.
+    try {
+      root.querySelectorAll('[style*="background-image"], [style*="background:"]').forEach(function (el) {
+        if (el.dataset.cbfBgImageAttached) {
+          return;
+        }
+        var style = el.getAttribute('style') || '';
+        if (style.indexOf('url(') === -1) {
+          return;
+        }
+        el.dataset.cbfBgImageAttached = '1';
+        el.classList.add('cbf-editable-bg-image');
+        el.addEventListener('click', function (e) {
+          if (!state.active) { return; }
+          if (e.target !== el) { return; }
+          e.preventDefault();
+          e.stopPropagation();
+          openBackgroundImagePicker(host, el);
+        });
+      });
+    } catch (e) { console.error('CBF enableEditing bg-image:', e); }
+
+    // 5. Links — pencil handles + dblclick.
+    try {
+      root.querySelectorAll('a').forEach(function (a) {
+        if (a.dataset.cbfLinkHandleAttached) {
+          return;
+        }
+        a.dataset.cbfLinkHandleAttached = '1';
+        a.classList.add('cbf-editable-link');
+        a.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        });
+        a.addEventListener('dblclick', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          openLinkPicker(host, a);
+        });
+        const handle = document.createElement('span');
+        handle.className = 'cbf-link-handle';
+        handle.setAttribute('contenteditable', 'false');
+        handle.title = Drupal.t('Редактировать ссылку');
+        handle.textContent = '✎';
+        handle.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          openLinkPicker(host, a);
+        });
+        try {
+          a.appendChild(handle);
+        } catch (err) {
+          // Some <a> elements might not allow children (e.g. inside SVG).
+        }
+      });
+    } catch (e) { console.error('CBF enableEditing links:', e); }
+
+    // 6. "Insert image" button.
+    try {
+      if (!host.querySelector('.cbf-insert-img-btn')) {
+        const insertBtn = document.createElement('button');
+        insertBtn.type = 'button';
+        insertBtn.className = 'cbf-insert-img-btn';
+        insertBtn.title = Drupal.t('Вставить изображение');
+        insertBtn.textContent = '+';
+        insertBtn.setAttribute('contenteditable', 'false');
+        insertBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          insertNewImage(host);
+        });
+        host.appendChild(insertBtn);
+      }
+    } catch (e) { console.error('CBF enableEditing insert-btn:', e); }
+
+    // 7. DELAYED RE-SCAN — re-run image/link/bg-image attachment after
+    // 200ms. This catches elements that weren't in the Shadow DOM on
+    // the first pass (e.g. if the block's JS dynamically injected
+    // content, or if there was a rendering delay). The re-scan only
+    // processes elements that haven't been attached yet (gated by
+    // the dataset flags), so it's safe to call multiple times.
+    setTimeout(function () {
+      if (!state.active || !entry.shadowRoot) {
         return;
       }
-      a.dataset.cbfLinkHandleAttached = '1';
-      a.classList.add('cbf-editable-link');
-      a.addEventListener('click', function (e) {
-        // Prevent navigation while editing.
-        e.preventDefault();
-        e.stopPropagation();
-      });
-      a.addEventListener('dblclick', function (e) {
-        e.preventDefault();
-        e.stopPropagation();
-        openLinkPicker(host, a);
-      });
-      // Inject a small pencil handle.
-      const handle = document.createElement('span');
-      handle.className = 'cbf-link-handle';
-      handle.setAttribute('contenteditable', 'false');
-      handle.title = Drupal.t('Редактировать ссылку');
-      handle.textContent = '✎';
-      handle.addEventListener('click', function (e) {
-        e.preventDefault();
-        e.stopPropagation();
-        openLinkPicker(host, a);
-      });
+      var r = entry.shadowRoot;
       try {
-        a.appendChild(handle);
-      } catch (err) {
-        // Some <a> elements might not allow children (e.g. inside SVG);
-        // skip those silently.
-      }
-    });
-
-    // "Insert image" floating button (per block).
-    if (!host.querySelector('.cbf-insert-img-btn')) {
-      const insertBtn = document.createElement('button');
-      insertBtn.type = 'button';
-      insertBtn.className = 'cbf-insert-img-btn';
-      insertBtn.title = Drupal.t('Вставить изображение');
-      insertBtn.textContent = '+';
-      insertBtn.setAttribute('contenteditable', 'false');
-      insertBtn.addEventListener('click', function (e) {
-        e.preventDefault();
-        e.stopPropagation();
-        insertNewImage(host);
-      });
-      host.appendChild(insertBtn);
-    }
+        r.querySelectorAll('img:not([data-cbf-overlay-attached])').forEach(function (img) {
+          img.dataset.cbfOverlayAttached = '1';
+          img.classList.add('cbf-editable-image');
+          var hasAsset = img.hasAttribute('data-cbf-asset');
+          attachImageEditing(host, img, hasAsset ? {} : { noReplace: true });
+        });
+      } catch (e) { /* ignore */ }
+      try {
+        r.querySelectorAll('a:not([data-cbf-link-handle-attached])').forEach(function (a) {
+          a.dataset.cbfLinkHandleAttached = '1';
+          a.classList.add('cbf-editable-link');
+          a.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); });
+          a.addEventListener('dblclick', function (e) { e.preventDefault(); e.stopPropagation(); openLinkPicker(host, a); });
+          var handle = document.createElement('span');
+          handle.className = 'cbf-link-handle';
+          handle.setAttribute('contenteditable', 'false');
+          handle.title = Drupal.t('Редактировать ссылку');
+          handle.textContent = '✎';
+          handle.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); openLinkPicker(host, a); });
+          try { a.appendChild(handle); } catch (err) {}
+        });
+      } catch (e) { /* ignore */ }
+      try {
+        r.querySelectorAll('[style*="background-image"]:not([data-cbf-bg-image-attached]), [style*="background:"]:not([data-cbf-bg-image-attached])').forEach(function (el) {
+          var style = el.getAttribute('style') || '';
+          if (style.indexOf('url(') === -1) { return; }
+          el.dataset.cbfBgImageAttached = '1';
+          el.classList.add('cbf-editable-bg-image');
+          el.addEventListener('click', function (e) {
+            if (!state.active || e.target !== el) { return; }
+            e.preventDefault(); e.stopPropagation();
+            openBackgroundImagePicker(host, el);
+          });
+        });
+      } catch (e) { /* ignore */ }
+    }, 200);
 
     setHint(Drupal.t('Редактируется «%s».', { '%s': getInstanceId(host) }));
   }
@@ -532,7 +581,12 @@
       el.classList.remove('cbf-editable');
     });
 
-    // Remove link handles.
+    // Remove link handles AND reset the attachment flag so links get
+    // re-attached on the next enableEditing call.
+    root.querySelectorAll('a[data-cbf-link-handle-attached]').forEach(function (a) {
+      delete a.dataset.cbfLinkHandleAttached;
+      a.classList.remove('cbf-editable-link');
+    });
     root.querySelectorAll('.cbf-link-handle').forEach(function (h) {
       h.parentNode && h.parentNode.removeChild(h);
     });
