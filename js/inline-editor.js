@@ -420,27 +420,25 @@
     document.addEventListener('selectionchange', onSelectionChangeGlobal);
 
     // Image overlays + resize handles + context menu + alt editor.
-    root.querySelectorAll('img[data-cbf-asset]').forEach(function (img) {
+    // ALL images get editing handlers — those with data-cbf-asset get
+    // full editing (replace, resize, alt, context menu), those without
+    // get limited editing (resize, alt, context menu — but no replace
+    // through file picker).
+    root.querySelectorAll('img').forEach(function (img) {
       if (img.dataset.cbfOverlayAttached) {
         return;
       }
       img.dataset.cbfOverlayAttached = '1';
       img.classList.add('cbf-editable-image');
-      attachImageEditing(host, img);
-    });
-    // Also allow non-asset images to be resized + alt-edited (but not replaced).
-    root.querySelectorAll('img:not([data-cbf-asset])').forEach(function (img) {
-      if (img.dataset.cbfOverlayAttached) {
-        return;
-      }
-      img.dataset.cbfOverlayAttached = '1';
-      attachImageEditing(host, img, { noReplace: true });
+      var hasAsset = img.hasAttribute('data-cbf-asset');
+      attachImageEditing(host, img, hasAsset ? {} : { noReplace: true });
     });
 
     // Background-image editing: find elements with background-image:url(...)
-    // in their inline style attribute and make them clickable to replace
-    // the background image.
-    root.querySelectorAll('[style*="background-image"]'), root.querySelectorAll('[style*="background:"]').forEach(function (el) {
+    // or background:...url(...) in their inline style attribute.
+    // Use a single querySelectorAll with comma-separated selectors (not
+    // the JavaScript comma operator, which was a bug in 1.4.5).
+    root.querySelectorAll('[style*="background-image"], [style*="background:"]').forEach(function (el) {
       if (el.dataset.cbfBgImageAttached) {
         return;
       }
@@ -1189,12 +1187,20 @@
 
   function attachImageEditing(host, img, opts) {
     opts = opts || {};
+    // eslint-disable-next-line no-console
+    console.log('Code Block Field: attachImageEditing', {
+      src: (img.getAttribute('src') || '').substring(0, 80),
+      hasAsset: img.hasAttribute('data-cbf-asset'),
+      noReplace: opts.noReplace || false,
+    });
     img.addEventListener('click', function (e) {
       if (!state.active) {
         return;
       }
       e.preventDefault();
       e.stopPropagation();
+      // eslint-disable-next-line no-console
+      console.log('Code Block Field: image clicked');
       // Single click selects the image and shows resize handles.
       selectImage(host, img);
     });

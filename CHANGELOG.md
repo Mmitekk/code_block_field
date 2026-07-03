@@ -5,6 +5,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.6] — 2026-07-02
+
+### Fixed
+
+- **Images not editable in inline editor (1.4.5 regression).** Two
+  bugs were found:
+  1. The background-image selector used the JavaScript **comma operator**
+     instead of a CSS comma selector. `querySelectorAll('[style*="background-image"]'), querySelectorAll('[style*="background:"]').forEach(...)` —
+     the first `querySelectorAll` result was silently discarded, and
+     only the second one got `.forEach()` called. Fixed by using a
+     single `querySelectorAll` with a comma-separated CSS selector:
+     `'[style*="background-image"], [style*="background:"]'`.
+  2. The image editing handlers were split into two separate
+     `querySelectorAll` calls — one for `img[data-cbf-asset]` and one
+     for `img:not([data-cbf-asset])`. If images didn't have
+     `data-cbf-asset` (which is the case for existing content saved
+     before 1.4.5), the first selector found nothing and the second
+     selector's `attachImageEditing` was called with `{ noReplace: true }`.
+     However, the `cbf-editable-image` class was only added in the
+     first branch, so images without `data-cbf-asset` didn't get the
+     visual indicator. Fixed by using a single `querySelectorAll('img')`
+     that processes ALL images, adding the `cbf-editable-image` class
+     to all of them, and passing `{ noReplace: true }` only for those
+     without `data-cbf-asset`.
+
+### Added
+
+- **Console logging for image editing.** `attachImageEditing` now logs
+  to the console when it attaches handlers to an image, including the
+  image src, whether it has `data-cbf-asset`, and whether `noReplace`
+  is set. Image clicks also log to the console. This helps diagnose
+  why images might not be editable.
+
+### Notes
+
+- **Existing images need to be re-saved through the entity form** (not
+  inline) to get `data-cbf-asset` attributes. After updating to 1.4.6,
+  open the entity in the edit form, save it (even without changes),
+  and then reload the page. The `hook_entity_presave` will run
+  `ProcessImages::process()` and add `data-cbf-asset` to all images.
+  After that, images will be fully editable (replace, resize, alt,
+  context menu) in the inline editor.
+
 ## [1.4.5] — 2026-07-02
 
 ### Fixed
@@ -827,6 +870,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with installation, configuration, usage, structure, and customisation
   instructions.
 
+[1.4.6]: https://github.com/Mmitekk/code_block_field/releases/tag/1.4.6
 [1.4.5]: https://github.com/Mmitekk/code_block_field/releases/tag/1.4.5
 [1.4.4]: https://github.com/Mmitekk/code_block_field/releases/tag/1.4.4
 [1.4.3]: https://github.com/Mmitekk/code_block_field/releases/tag/1.4.3
