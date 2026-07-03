@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.9] — 2026-07-03
+
+### Fixed
+
+- **CRITICAL: Internal editor flags (`data-cbf-overlay-attached`,
+  `data-cbf-link-handle-attached`, `data-cbf-bg-image-attached`) were
+  being saved to the database.** These flags are added by
+  `enableEditing()` to track which elements already have click handlers
+  attached. They are meant to be temporary — only existing while edit
+  mode is on. But `collectPayload()` (which builds the HTML to send to
+  the server on save) did NOT remove them.
+
+  This meant that after the first inline save, the HTML in the
+  database contained `data-cbf-overlay-attached="1"` on every `<img>`
+  tag. On the next page load, `enableEditing()` saw the flag and
+  **skipped** those images (thinking handlers were already attached).
+  Result: images were not editable on the first "Edit Mode" click.
+
+  This also explains why toggling Edit Mode twice worked: the first
+  `disableEditing()` cleared the flags from the DOM (but not from the
+  server), then the second `enableEditing()` re-attached handlers
+  because the flags were now gone.
+
+  Fix: `collectPayload()` now explicitly removes all three
+  `data-cbf-*` attributes from the cloned HTML before serialising it
+  for the save request. The attributes are also cleaned from
+  `disableEditing()` (already done in 1.4.7) so they never persist
+  in the DOM between edit sessions.
+
+  **Existing database content will still have the stale attributes.**
+  To clean them up, simply open each entity in the edit form and
+  re-save it — the next inline save will write clean HTML without
+  the flags.
+
 ## [1.4.8] — 2026-07-03
 
 ### Fixed
@@ -928,6 +962,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with installation, configuration, usage, structure, and customisation
   instructions.
 
+[1.4.9]: https://github.com/Mmitekk/code_block_field/releases/tag/1.4.9
 [1.4.8]: https://github.com/Mmitekk/code_block_field/releases/tag/1.4.8
 [1.4.7]: https://github.com/Mmitekk/code_block_field/releases/tag/1.4.7
 [1.4.6]: https://github.com/Mmitekk/code_block_field/releases/tag/1.4.6

@@ -1706,6 +1706,21 @@
     clone.querySelectorAll('.cbf-editable-bg-image').forEach(function (el) {
       el.classList.remove('cbf-editable-bg-image');
     });
+    // CRITICAL: Remove ALL data-cbf-* attributes that the inline editor
+    // added during enableEditing(). These are internal flags
+    // (data-cbf-overlay-attached, data-cbf-link-handle-attached,
+    // data-cbf-bg-image-attached) that MUST NOT be saved to the database
+    // — if they are saved, the next enableEditing() call sees them and
+    // skips re-attaching handlers, making images/links uneditable.
+    clone.querySelectorAll('[data-cbf-overlay-attached]').forEach(function (el) {
+      el.removeAttribute('data-cbf-overlay-attached');
+    });
+    clone.querySelectorAll('[data-cbf-link-handle-attached]').forEach(function (el) {
+      el.removeAttribute('data-cbf-link-handle-attached');
+    });
+    clone.querySelectorAll('[data-cbf-bg-image-attached]').forEach(function (el) {
+      el.removeAttribute('data-cbf-bg-image-attached');
+    });
     // Remove resize handles (they are siblings of the img, not children).
     clone.querySelectorAll('.cbf-img-resize-handle').forEach(function (h) {
       h.parentNode && h.parentNode.removeChild(h);
