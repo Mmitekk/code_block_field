@@ -25,7 +25,7 @@ codemirror:
 
 # Backend widget (entity edit form).
 widget:
-  version: 1.4.12
+  version: 1.4.13
   js:
     js/widget.js: { minified: false }
   css:
@@ -39,7 +39,7 @@ widget:
 
 # Client-side renderer that mounts the Shadow DOM.
 renderer:
-  version: 1.4.12
+  version: 1.4.13
   js:
     js/renderer.js: { minified: false }
   dependencies:
@@ -48,7 +48,7 @@ renderer:
 
 # Inline editor (page-builder mode).
 inline_editor:
-  version: 1.4.12
+  version: 1.4.13
   js:
     js/inline-editor.js: { minified: false }
   css:

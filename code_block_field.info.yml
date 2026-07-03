@@ -3,7 +3,7 @@ type: module
 description: 'Поле с под-полями HTML/CSS/JS и инлайн-редактором в стиле конструкторов. Каждый блок рендерится в изолированном Shadow DOM и может редактироваться прямо на странице (текст, изображения, ссылки) без открытия формы сущности.'
 package: Custom
 core_version_requirement: ^9.5 || ^10 || ^11
-version: '1.4.12'
+version: '1.4.13'
 configure: code_block_field.settings
 dependencies:
   - drupal:field

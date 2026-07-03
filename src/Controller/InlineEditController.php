@@ -462,7 +462,13 @@ class InlineEditController extends ControllerBase {
       return new JsonResponse(['error' => 'Could not save uploaded file.'], 500);
     }
 
-    $errors = \Drupal::service('file.validator')->validate($uploaded, $validators);
+    $violations = \Drupal::service('file.validator')->validate($uploaded, $validators);
+    $errors = [];
+    if ($violations) {
+      foreach ($violations as $violation) {
+        $errors[] = $violation->getMessage();
+      }
+    }
     if ($errors) {
       $uploaded->delete();
       return new JsonResponse(['error' => implode(' ', $errors)], 400);
