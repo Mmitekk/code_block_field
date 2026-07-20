@@ -119,6 +119,18 @@ class CodeBlockWidget extends WidgetBase {
     ];
     $element['#attributes']['data-cbf-settings'] = json_encode($widget_settings);
 
+    // Priority loading: render the block server-side via Declarative Shadow
+    // DOM so it is visible on the first paint (no wait for renderer.js).
+    // Use for above-the-fold / first-screen blocks. Forces "open" shadow
+    // mode (closed is incompatible with declarative shadow DOM + the inline
+    // editor's shadow-root reference).
+    $element['priority'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t('Приоритетная загрузка'),
+      '#description' => $this->t('Рендерить блок серверно (Declarative Shadow DOM), чтобы он был виден сразу при первой отрисовке страницы, не дожидаясь выполнения JS. Используйте для блоков «первого экрана» (например, главного экрана сайта).'),
+      '#default_value' => (bool) ($item->priority ?? FALSE),
+    ];
+
     // Use vertical tabs to switch HTML/CSS/JS without scrolling.
     $element['code'] = [
       '#type' => 'vertical_tabs',

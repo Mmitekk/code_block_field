@@ -58,6 +58,10 @@ class CodeBlockItem extends FieldItemBase {
       ->setLabel(new TranslatableMarkup('Managed assets (images)'))
       ->setDescription(new TranslatableMarkup('Serialised map of asset_key =&gt; { fid, src, alt }.'));
 
+    $properties['priority'] = DataDefinition::create('boolean')
+      ->setLabel(new TranslatableMarkup('Priority loading'))
+      ->setDescription(new TranslatableMarkup('Render this block server-side via Declarative Shadow DOM so it is visible on the first paint, without waiting for JavaScript. Use for above-the-fold / first-screen blocks.'));
+
     return $properties;
   }
 
@@ -89,6 +93,14 @@ class CodeBlockItem extends FieldItemBase {
           'size' => 'big',
           'not null' => FALSE,
           'serialize' => TRUE,
+        ],
+        // When TRUE, the formatter renders the block via Declarative Shadow
+        // DOM (server-side) so it is visible immediately on the first paint.
+        'priority' => [
+          'type' => 'int',
+          'size' => 'tiny',
+          'not null' => FALSE,
+          'default' => 0,
         ],
       ],
     ];

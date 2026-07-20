@@ -135,6 +135,17 @@ class CodeBlockFormatter extends FormatterBase {
         $delta
       ));
 
+      // Priority loading: render the block server-side via Declarative
+      // Shadow DOM so it is visible on the first paint. Closed shadow
+      // mode is incompatible with declarative shadow DOM (the parser
+      // creates the root and we can no longer capture a reference for
+      // the inline editor), so priority forces "open".
+      $priority = !empty($item->priority);
+      $shadow_mode = $settings['shadow_mode'] ?? 'open';
+      if ($priority) {
+        $shadow_mode = 'open';
+      }
+
       $elements[$delta] = [
         '#theme' => 'code_block_field',
         '#instance_id' => $instance_id,
@@ -146,8 +157,13 @@ class CodeBlockFormatter extends FormatterBase {
         '#field_name' => $field_name,
         '#delta' => $delta,
         '#langcode' => $langcode ?? $entity->language()->getId(),
-        '#shadow_mode' => $settings['shadow_mode'] ?? 'open',
+        '#shadow_mode' => $shadow_mode,
         '#inline_enabled' => $inline_enabled,
+        '#priority' => $priority,
+        // CSS pre-processed server-side for the Declarative Shadow DOM
+        // template. The theme-variable bridge (--var: inherit) is still
+        // injected client-side by renderer.js (it needs getComputedStyle).
+        '#prepared_css' => $priority ? $this->prepareCssServerSide((string) $item->css) : '',
         '#attached' => [
           'library' => ['code_block_field/renderer'],
         ],
@@ -189,6 +205,39 @@ class CodeBlockFormatter extends FormatterBase {
       $elements[$delta]['#cache']['contexts'][] = 'user';
     }
     return $elements;
+  }
+
+  /**
+   * Pre-processes the user-supplied CSS so that it works inside the
+   * Declarative Shadow DOM that the formatter emits for priority blocks.
+   *
+   * This is a PHP port of the two selector rewrites performed in
+   * js/renderer.js (prepareCss) that do NOT require access to the live
+   * document:
+   *  1. `:root { ... }` → `:host { ... }` (custom properties declared on
+   *     :root are invisible inside a shadow root; :host resolves them on
+   *     the host element).
+   *  2. `html, body { ... }` (and `html`/`body` alone) → `:host { ... }`
+   *     (there is no <html>/<body> inside a shadow root).
+   *
+   * The theme-variable bridge (`:host { --var: inherit; }`) requires
+   * getComputedStyle() and is therefore still injected client-side by
+   * renderer.js after hydration.
+   *
+   * Kept in sync with the JS implementation in js/renderer.js.
+   */
+  protected function prepareCssServerSide(string $css): string {
+    if ($css === '') {
+      return $css;
+    }
+
+    // 1. :root { → :host {
+    $css = preg_replace('/(^|\s|;|}):root\s*\{/', '$1:host {', $css);
+
+    // 2. html, body / body, html / html / body { → :host {
+    $css = preg_replace('/(^|\s|;|})\s*(html\s*,\s*body|body\s*,\s*html|html|body)\s*\{/', '$1 :host {', $css);
+
+    return $css;
   }
 
   /**

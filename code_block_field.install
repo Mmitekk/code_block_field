@@ -114,3 +114,106 @@ function code_block_field_update_8103(): void {
   $config->set('auto_assign_asset_keys', TRUE)->save();
   \Drupal::messenger()->addStatus(t('Авто-присвоение data-cbf-asset включено обратно. Теперь все изображения в блоках Code Block будут автоматически получать уникальный ключ при сохранении, что позволяет редактировать их через inline-редактор.'));
 }
+
+/**
+ * Update 8104: добавляем колонку `priority` полю типа code_block.
+ *
+ * Начиная с версии 1.4.14 у каждого блока есть опция «Приоритетная
+ * загрузка» (галочка в виджете). При её включении форматтер рендерит
+ * блок серверно через Declarative Shadow DOM (<template shadowrootmode>),
+ * поэтому контент виден на первом paint без ожидания renderer.js.
+ *
+ * ВАЖНО: мы НЕ используем EntityDefinitionUpdateManager::
+ * updateFieldStorageDefinition(). Для поля, в котором уже есть данные,
+ * Drupal намеренно запрещает изменение схемы (см. updateSharedTableSchema
+ * / FieldStorageDefinitionUpdateForbiddenException), а на пути dedicated-
+ * таблиц countField() обращается к новой колонке ДО её создания — это и
+ * было причиной ошибки «Unknown column 'field_code_block_priority'».
+ *
+ * Вместо этого добавляем колонку вручную в каждую таблицу поля (dedicated
+ * data + revision таблицы) и одновременно обновляем хранимую схему в
+ * key_value «entity.storage_schema.sql», чтобы requiresFieldStorageSchema
+ * Changes() не сообщал о висящем изменении (иначе в статус-репорте будет
+ * предупреждение «mismatched field definitions», а следующий drush updb
+ * сломается). Спек колонки берётся ровно из CodeBlockItem::schema() — это
+ * же значение хранит Drupal (getDedicatedTableSchema копирует атрибуты
+ * колонки как есть).
+ */
+function code_block_field_update_8104(): void {
+  $connection = \Drupal::database();
+  $schema_handler = $connection->schema();
+  $installed_schema_store = \Drupal::keyValue('entity.storage_schema.sql');
+
+  // Спек колонки — ДОЛЖНА совпадать с CodeBlockItem::schema() 'priority'.
+  // Именно так Drupal хранит колонку для dedicated/shared таблиц
+  // (атрибуты копируются как есть, 'not null' переопределяется только для
+  // entity-key полей, а code_block таковым не является).
+  $priority_spec = [
+    'type' => 'int',
+    'size' => 'tiny',
+    'not null' => FALSE,
+    'default' => 0,
+  ];
+
+  $field_storages = \Drupal::entityTypeManager()
+    ->getStorage('field_storage_config')
+    ->loadByProperties(['type' => 'code_block']);
+
+  if (empty($field_storages)) {
+    return;
+  }
+
+  foreach ($field_storages as $field_storage) {
+    $entity_type_id = $field_storage->getTargetEntityTypeId();
+    $field_name = $field_storage->getName();
+    $column_name = $field_name . '_priority';
+    $schema_key = $entity_type_id . '.field_schema_data.' . $field_name;
+
+    // Хранимая схема поля (key_value) поименована по таблицам и содержит
+    // ВСЕ таблицы, в которых живёт поле. Переиспользуем эти точные имена,
+    // чтобы не вычислять их вручную.
+    $stored = $installed_schema_store->get($schema_key, []);
+
+    if (empty($stored)) {
+      // Нетипичная ситуация: поле без записи схемы. Просто добавим колонку
+      // в ожидаемые dedicated-таблицы и не трогаем key_value, чтобы не
+      // записать обрывки схемы. code_block использует dedicated-хранилище:
+      // {entity_type}__{field_name} и {entity_type}_revision__{field_name}.
+      foreach ([
+        $entity_type_id . '__' . $field_name,
+        $entity_type_id . '_revision__' . $field_name,
+      ] as $table_name) {
+        if ($schema_handler->tableExists($table_name) && !$schema_handler->fieldExists($table_name, $column_name)) {
+          $schema_handler->addField($table_name, $column_name, $priority_spec);
+        }
+      }
+      continue;
+    }
+
+    $changed = FALSE;
+    foreach ($stored as $table_name => $table_schema) {
+      // 1. Добавляем колонку в реальную таблицу БД (идемпотентно).
+      if ($schema_handler->tableExists($table_name) && !$schema_handler->fieldExists($table_name, $column_name)) {
+        $schema_handler->addField($table_name, $column_name, $priority_spec);
+      }
+
+      // 2. Записываем колонку в хранимую схему, чтобы Drupal не считал,
+      //    что поле требует обновления схемы.
+      if (is_array($table_schema) && isset($table_schema['fields']) && !array_key_exists($column_name, $table_schema['fields'])) {
+        $table_schema['fields'][$column_name] = $priority_spec;
+        $stored[$table_name] = $table_schema;
+        $changed = TRUE;
+      }
+    }
+
+    if ($changed) {
+      $installed_schema_store->set($schema_key, $stored);
+    }
+  }
+
+  // Сбрасываем кэш определений полей, чтобы новые колонки немедленно
+  // учитывались при сохранении сущностей.
+  \Drupal::entityTypeManager()->clearCachedDefinitions();
+
+  \Drupal::messenger()->addStatus(t('Полю Code Block добавлена опция «Приоритетная загрузка» (колонка `priority`). Теперь в форме редактирования сущности у каждого блока доступна галочка приоритетной загрузки для блоков «первого экрана».'));
+}

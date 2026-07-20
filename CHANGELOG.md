@@ -5,6 +5,56 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.14] — 2026-07-20
+
+### Added
+
+- **Опция «Приоритетная загрузка» (Declarative Shadow DOM).** Теперь у
+  каждого блока в форме редактирования сущности есть галочка
+  «Приоритетная загрузка». При её включении форматтер рендерит блок
+  серверно через **Declarative Shadow DOM** (`<template shadowrootmode>`),
+  поэтому контент попадает в первый ответ сервера и виден на **первой
+  отрисовке (first paint)** — без ожидания выполнения `renderer.js`.
+
+  Это решает проблему «блок первого экрана появляется позже остального
+  контента»: теперь блоки первого экрана (главный экран сайта, hero-секции)
+  можно сделать видимыми мгновенно, как обычную разметку темы, сохранив
+  при этом изоляцию CSS и инлайн-редактирование.
+
+  Как это работает:
+  1. Форматтер отдаёт HTML + серверно-подготовленный CSS внутри
+     `<template shadowrootmode="open">` прямо в теле страницы (CSS проходит
+     те же преобразования, что и в `renderer.js`: `:root` → `:host`,
+     `html/body` → `:host`).
+  2. Браузер создаёт Shadow root **во время парсинга HTML**, до любого JS,
+     поэтому контент сразу отображается. Современные браузеры
+     (Chrome/Edge 111+, Safari 16.4+, Firefox 123+) поддерживают это
+     нативно; старые браузеры получают polyfill от `renderer.js` (mount из
+     JSON-payload, как раньше).
+  3. `renderer.js` при загрузке «гидратирует» уже существующий shadow
+     root: добавляет бридж темовых CSS-переменных (`--var: inherit`) и
+     запускает JS блока, не перерисовывая уже показанный контент (без
+     мерцания).
+  4. Инлайн-редактор работает как прежде — shadow root уже зарегистрирован
+     в `codeBlockFieldRegistry`.
+
+  Замечание: приоритетные блоки форсируют `open` shadow mode (closed
+  несовместим с Declarative Shadow DOM + ссылкой на shadow root для
+  инлайн-редактора).
+
+### Changed
+
+- `renderer.js` рефакторен: логика бриджа переменных вынесена в
+  `buildBridgeCss()` / `injectVariableBridge()`, запуск JS блока — в
+  `runBlockJs()`. Поведение обычных (не-priority) блоков не изменилось.
+
+### Database
+
+- Добавлена колонка `priority` (TINYINT, default 0) для поля типа
+  `code_block`. Применяется через `code_block_field_update_8104()` —
+  `drush updb -y` автоматически добавит колонку ко всем существующим
+  полям.
+
 ## [1.4.11] — 2026-07-03
 
 ### Changed

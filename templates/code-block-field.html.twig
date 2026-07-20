@@ -4,12 +4,21 @@
   into the Shadow DOM by js/renderer.js on the client side; we only emit the
   raw data here (escaped JSON in <script type="application/json">) so that
   nothing leaks into the host document.
+
+  When `priority` is set, the formatter additionally emits a Declarative
+  Shadow DOM <template shadowrootmode="open"> with the HTML and the
+  server-prepared CSS. The browser parses this during initial HTML load and
+  creates the shadow root BEFORE any JavaScript runs, so the block is visible
+  on the very first paint. renderer.js then hydrates the existing shadow root
+  (injects the theme-variable bridge, runs the block JS, registers the
+  instance for the inline editor) instead of mounting it from scratch.
 #}
 {%
   set classes = [
     'cbf-host',
     'cbf-host--' ~ shadow_mode,
     inline_enabled ? 'cbf-host--inline-enabled' : 'cbf-host--inline-disabled',
+    priority ? 'cbf-host--priority',
   ]
 %}
 <div{{ attributes.addClass(classes) }}
@@ -19,7 +28,21 @@
   data-cbf-field-name="{{ field_name }}"
   data-cbf-delta="{{ delta }}"
   data-cbf-langcode="{{ langcode }}"
-  data-cbf-shadow-mode="{{ shadow_mode }}">
+  data-cbf-shadow-mode="{{ shadow_mode }}"
+  {% if priority %}data-cbf-priority="1"{% endif %}>
+  {% if priority %}
+    {#
+      Declarative Shadow DOM. The browser turns this <template> into a real
+      shadow root at parse time, so the HTML/CSS below is painted immediately.
+      Modern browsers (Chrome/Edge 111+, Safari 16.4+, Firefox 123+) all
+      support this; older ones are polyfilled by js/renderer.js which falls
+      back to mounting from the JSON payload when host.shadowRoot is absent.
+    #}
+    <template shadowrootmode="open">
+      <style>{{ prepared_css|raw }}</style>
+      <div class="cbf-shadow-content">{{ html|raw }}</div>
+    </template>
+  {% endif %}
   <script type="application/json" class="cbf-payload">
     {{ {
       'html': html,

@@ -27,6 +27,8 @@ function code_block_field_theme(): array {
         'langcode' => '',
         'shadow_mode' => 'open',
         'inline_enabled' => FALSE,
+        'priority' => FALSE,
+        'prepared_css' => '',
         'attributes' => [],
       ],
       'template' => 'code-block-field',
