@@ -48,7 +48,7 @@
       'html': html,
       'css': css,
       'js': js,
-    }|json_encode|raw }}
+    }|json_encode|replace({'</': '<\\/'})|raw }}
   </script>
   <noscript>
     <div class="cbf-noscript">

@@ -231,6 +231,10 @@ class CodeBlockFormatter extends FormatterBase {
       return $css;
     }
 
+    // Defensive: authors sometimes paste a full <style>…</style> block into
+    // the CSS field. Inside a <style> element that would nest and break.
+    $css = preg_replace('/<\/?style[^>]*>/i', '', $css) ?? $css;
+
     // 1. :root { → :host {
     $css = preg_replace('/(^|\s|;|}):root\s*\{/', '$1:host {', $css);
 

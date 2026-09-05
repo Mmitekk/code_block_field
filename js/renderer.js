@@ -124,6 +124,10 @@
     }
     let processed = css;
 
+    // Defensive: strip <style> wrappers if the author pasted a full
+    // <style>…</style> block into the CSS field.
+    processed = processed.replace(/<\/?style[^>]*>/gi, '');
+
     // 1. Replace `:root { ... }` with `:host { ... }`. Custom properties
     //    defined on :root in light DOM are invisible inside the shadow
     //    root; :host is the correct selector for the host element of the
@@ -159,6 +163,11 @@
     if (!payload.js || !payload.js.trim().length) {
       return;
     }
+    // Defensive: strip <script> wrappers if pasted into the JS field.
+    const cleanJs = String(payload.js).replace(/<\/?script[^>]*>/gi, '');
+    if (!cleanJs.trim().length) {
+      return;
+    }
     try {
       // eslint-disable-next-line no-new-func
       const userFn = new Function(
@@ -166,7 +175,7 @@
         'shadowRoot',
         'document',
         'window',
-        '"use strict";\n' + payload.js
+        '"use strict";\n' + cleanJs
       );
       userFn.call(host, host, shadowRoot, document, window);
     } catch (e) {

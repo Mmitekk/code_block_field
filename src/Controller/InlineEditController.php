@@ -71,13 +71,19 @@ class InlineEditController extends ControllerBase {
 
   /**
    * Access check for the inline-save endpoint.
+   *
+   * NOTE: _custom_access callbacks are resolved by Drupal's access
+   * ArgumentsResolver from route parameters, NOT by the HttpKernel
+   * controller resolver — a required Request argument throws
+   * "requires a value for the $request argument" (HTTP 500). So Request
+   * is optional here and falls back to the current request from the stack.
    */
-  public function accessSave(Request $request): AccessResult {
-    $account = $this->currentUser();
+  public function accessSave(AccountInterface $account, ?Request $request = NULL): AccessResult {
+    $request ??= \Drupal::requestStack()->getCurrentRequest();
     if (!$account->hasPermission('use code block field inline editor')) {
       return AccessResult::forbidden('Missing inline editor permission.')->cachePerPermissions();
     }
-    $payload = json_decode((string) $request->getContent(), TRUE);
+    $payload = $request ? json_decode((string) $request->getContent(), TRUE) : NULL;
     if (!is_array($payload)) {
       return AccessResult::forbidden('Invalid payload.')->cachePerPermissions();
     }
@@ -103,13 +109,18 @@ class InlineEditController extends ControllerBase {
 
   /**
    * Access check for the image-upload endpoint.
+   *
+   * Same note as accessSave(): Request must stay optional, otherwise the
+   * access ArgumentsResolver throws HTTP 500. The upload uses multipart
+   * FormData (not JSON), so a JSON payload is only checked on a best-effort
+   * basis.
    */
-  public function accessUpload(Request $request): AccessResult {
-    $account = $this->currentUser();
+  public function accessUpload(AccountInterface $account, ?Request $request = NULL): AccessResult {
     if (!$account->hasPermission('use code block field inline editor')) {
       return AccessResult::forbidden()->cachePerPermissions();
     }
-    $payload = json_decode((string) $request->getContent(), TRUE);
+    $request ??= \Drupal::requestStack()->getCurrentRequest();
+    $payload = $request ? json_decode((string) $request->getContent(), TRUE) : NULL;
     if (is_array($payload)) {
       $entity_type = $payload['entity_type'] ?? '';
       $entity_id = $payload['entity_id'] ?? 0;

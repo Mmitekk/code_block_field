@@ -1627,7 +1627,7 @@
       formData.append('key', assetKey);
       formData.append('alt', altInput.value);
 
-      var uploadUrl = endpoints.upload;
+      var uploadUrl = withCsrfToken(endpoints.upload);
       if (!uploadUrl) {
         statusDiv.textContent = 'Ошибка: endpoint загрузки не настроен';
         statusDiv.style.color = 'red';
@@ -1817,6 +1817,18 @@
 
   // -- Save -------------------------------------------------------------------
 
+  // Appends the CSRF token as ?token= query param. Routes with
+  // `options: _csrf_token: TRUE` are validated by CsrfAccessCheck from the
+  // query string; the X-CSRF-Token header alone is not enough on all
+  // Drupal versions. We send both (query + header) for compatibility.
+  function withCsrfToken(url) {
+    const token = drupalSettings && drupalSettings.code_block_field && drupalSettings.code_block_field.csrf_token;
+    if (!token || !url || url.indexOf('token=') !== -1) {
+      return url;
+    }
+    return url + (url.indexOf('?') === -1 ? '?' : '&') + 'token=' + encodeURIComponent(token);
+  }
+
   function collectPayload(host) {
     const entry = getRegistryEntry(host);
     if (!entry || !entry.shadowRoot) {
@@ -1941,9 +1953,11 @@
           delta: parseInt(host.getAttribute('data-cbf-delta'), 10),
           langcode: host.getAttribute('data-cbf-langcode'),
           html: data.html,
+          css: data.css,
+          js: data.js,
           assets: data.assets,
         };
-        saves.push(fetch(endpoints.save, {
+        saves.push(fetch(withCsrfToken(endpoints.save), {
           method: 'POST',
           credentials: 'same-origin',
           headers: {
