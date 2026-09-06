@@ -134,7 +134,7 @@
       }
     });
 
-    setHint(state.active ? Drupal.t('Режим редактирования. Кликните по тексту для правки, по картинке — для замены.') : '');
+    setHint(state.active ? Drupal.t('Режим редактирования. Кликните по тексту для правки, по картинке — для замены. Enter в списке — новый пункт.') : '');
     updateSaveButton();
   }
 
@@ -407,17 +407,13 @@
         const hasText = Array.from(el.childNodes).some(function (n) {
           return n.nodeType === Node.TEXT_NODE && n.textContent.trim() !== '';
         });
-        if (!hasText && el.tagName !== 'A') {
+        // Empty <li> items are still made editable so the user can click
+        // into a blank bullet and type (Enter inside an <li> adds a new
+        // item, see onEditableKeydown).
+        if (!hasText && el.tagName !== 'A' && el.tagName !== 'LI') {
           return;
         }
-        el.setAttribute('contenteditable', 'true');
-        el.setAttribute('spellcheck', 'false');
-        el.classList.add('cbf-editable');
-        el.addEventListener('input', onEditableInput.bind(null, host));
-        el.addEventListener('focus', onEditableFocus.bind(null, host));
-        el.addEventListener('blur', onEditableBlur);
-        el.addEventListener('mouseup', onEditableSelectionChange.bind(null, host));
-        el.addEventListener('keyup', onEditableSelectionChange.bind(null, host));
+        attachTextHandlers(el, host);
       });
     } catch (e) { console.error('CBF enableEditing text:', e); }
 
@@ -612,6 +608,82 @@
     });
     // Hide any open context menus / alt editors / format toolbar.
     closeAllPopups();
+  }
+
+  function attachTextHandlers(el, host) {
+    el.setAttribute('contenteditable', 'true');
+    el.setAttribute('spellcheck', 'false');
+    el.classList.add('cbf-editable');
+    el.addEventListener('input', onEditableInput.bind(null, host));
+    el.addEventListener('focus', onEditableFocus.bind(null, host));
+    el.addEventListener('blur', onEditableBlur);
+    el.addEventListener('mouseup', onEditableSelectionChange.bind(null, host));
+    el.addEventListener('keyup', onEditableSelectionChange.bind(null, host));
+    el.addEventListener('keydown', onEditableKeydown.bind(null, host));
+  }
+
+  // Inside a list item, Enter adds a new <li> after the current one
+  // (Shift+Enter keeps the default <br> line break). The shadow-DOM +
+  // nested-contenteditable combination makes the browser default
+  // unreliable here, so this is handled explicitly.
+  function onEditableKeydown(host, e) {
+    if (e.key !== 'Enter' || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) {
+      return;
+    }
+    const entry = getRegistryEntry(host);
+    const root = entry && entry.shadowRoot;
+    if (!root) {
+      return;
+    }
+    const sel = root.getSelection ? root.getSelection() : window.getSelection();
+    if (!sel || sel.rangeCount === 0) {
+      return;
+    }
+    let node = sel.getRangeAt(0).startContainer;
+    if (node && node.nodeType === Node.TEXT_NODE) {
+      node = node.parentNode;
+    }
+    const li = node && node.closest ? node.closest('li') : null;
+    if (!li || li.getRootNode() !== root) {
+      return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    const newLi = document.createElement('li');
+    try {
+      const range = sel.getRangeAt(0);
+      // Move everything after the caret within this <li> into the new one
+      // (splitting the item when Enter is pressed mid-text).
+      const after = document.createRange();
+      after.setStart(range.startContainer, range.startOffset);
+      after.setEnd(li, li.childNodes.length);
+      const frag = after.extractContents();
+      newLi.appendChild(frag);
+    } catch (err) {
+      // Fallback: plain empty item.
+    }
+    if (!newLi.hasChildNodes()) {
+      newLi.appendChild(document.createElement('br'));
+    }
+    // Keep a caret placeholder in the old item if it became empty.
+    if (!li.hasChildNodes()) {
+      li.appendChild(document.createElement('br'));
+    }
+    li.parentNode.insertBefore(newLi, li.nextSibling);
+    attachTextHandlers(newLi, host);
+    markDirty(host);
+    try {
+      const caret = document.createRange();
+      caret.setStart(newLi, 0);
+      caret.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(caret);
+      if (typeof newLi.focus === 'function') {
+        newLi.focus({ preventScroll: true });
+      }
+    } catch (err) {
+      // Caret placement is best-effort; the item itself is already added.
+    }
   }
 
   function onEditableInput(host, e) {
@@ -2241,13 +2313,10 @@
   Drupal.codeBlockField.activate = function () { if (!state.active) { onToggle(); } };
   Drupal.codeBlockField.deactivate = function () { if (state.active) { onToggle(); } };
 
-  // Bridge: convert the custom `InvokeCommand` callbacks used by the modal
-  // forms into DOM events so the editor can listen to them generically.
+  // Bridge: convert the custom `InvokeCommand` callback used by the image
+  // picker modal form into a DOM event.
   jQuery(document).on('codeBlockFieldImagePicked', function (e, payload) {
     document.dispatchEvent(new CustomEvent('codeBlockFieldImagePicked', { detail: payload }));
-  });
-  jQuery(document).on('codeBlockFieldLinkPicked', function (e, payload) {
-    document.dispatchEvent(new CustomEvent('codeBlockFieldLinkPicked', { detail: payload }));
   });
 
 })(Drupal, once);

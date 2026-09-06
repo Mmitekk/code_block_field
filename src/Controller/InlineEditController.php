@@ -26,8 +26,6 @@ use Symfony\Component\HttpFoundation\Request;
  *  - GET  /admin/code-block-field/image-picker/{…}
  *      Opens a Drupal modal with a managed-file form for replacing a single
  *      image inside the inline editor.
- *  - GET  /admin/code-block-field/link-picker/{…}
- *      Opens a Drupal modal with a small form to edit an <a> element.
  */
 class InlineEditController extends ControllerBase {
 
@@ -527,20 +525,6 @@ class InlineEditController extends ControllerBase {
     $build['form'] = $form;
     $build['#attached']['library'][] = 'core/drupal.dialog.ajax';
     $build['#title'] = $this->t('Заменить изображение');
-    return $build;
-  }
-
-  /**
-   * Modal picker for editing an <a> element inside the inline editor.
-   */
-  public function linkPicker($entity_type, $entity_id, $field_name, $delta, $link_key): array {
-    $form = $this->formBuilder()->getForm(
-      '\Drupal\code_block_field\Form\InlineLinkPickerForm',
-      $entity_type, (int) $entity_id, $field_name, (int) $delta, $link_key
-    );
-    $build['form'] = $form;
-    $build['#attached']['library'][] = 'core/drupal.dialog.ajax';
-    $build['#title'] = $this->t('Редактировать ссылку');
     return $build;
   }
 

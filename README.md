@@ -217,8 +217,7 @@ code_block_field/
     │   └── InlineEditController.php      — AJAX endpoint'ы (save, upload, picker dialogs)
     ├── Form/
     │   ├── SettingsForm.php              — Форма глобальных настроек
-    │   ├── InlineImagePickerForm.php     — Модальная форма выбора изображения
-    │   └── InlineLinkPickerForm.php      — Модальная форма редактирования ссылки
+    │   └── InlineImagePickerForm.php     — Модальная форма выбора изображения
     └── Plugin/Field/
         ├── FieldType/CodeBlockItem.php   — Тип поля (html, css, js, assets)
         ├── FieldWidget/CodeBlockWidget.php     — Виджет с CodeMirror
@@ -274,7 +273,8 @@ window.codeBlockFieldRegistry;
 | POST | `/admin/code-block-field/inline-save` | Сохраняет изменённый HTML одного field item. CSRF-защищён |
 | POST | `/admin/code-block-field/image-upload` | Загрузка картинки из инлайн-редактора. CSRF-защищён |
 | GET  | `/admin/code-block-field/image-picker/{entity_type}/{entity_id}/{field_name}/{delta}/{asset_key}` | Модальная форма выбора картинки |
-| GET  | `/admin/code-block-field/link-picker/{entity_type}/{entity_id}/{field_name}/{delta}/{link_key}` | Модальная форма редактирования ссылки |
+
+> Редактирование ссылок — собственное JS-окно инлайн-редактора (без серверной формы). Enter внутри `<li>` добавляет новый пункт списка; пустые теги вычищаются при сохранении.
 
 ## Ограничения и особенности
 

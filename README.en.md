@@ -204,8 +204,7 @@ code_block_field/
     │   └── InlineEditController.php      — AJAX endpoints (save, upload, picker dialogs)
     ├── Form/
     │   ├── SettingsForm.php              — Global settings form
-    │   ├── InlineImagePickerForm.php     — Modal image picker form
-    │   └── InlineLinkPickerForm.php      — Modal link editor form
+    │   └── InlineImagePickerForm.php     — Modal image picker form
     └── Plugin/Field/
         ├── FieldType/CodeBlockItem.php   — Field type (html, css, js, assets)
         ├── FieldWidget/CodeBlockWidget.php     — CodeMirror-backed widget
@@ -261,7 +260,8 @@ window.codeBlockFieldRegistry;
 | POST | `/admin/code-block-field/inline-save` | Saves the modified HTML of one field item. CSRF-protected |
 | POST | `/admin/code-block-field/image-upload` | Uploads an image from the inline editor. CSRF-protected |
 | GET  | `/admin/code-block-field/image-picker/{entity_type}/{entity_id}/{field_name}/{delta}/{asset_key}` | Modal image picker form |
-| GET  | `/admin/code-block-field/link-picker/{entity_type}/{entity_id}/{field_name}/{delta}/{link_key}` | Modal link editor form |
+
+> Link editing uses the inline editor's own JS dialog (no server-side form). Enter inside an `<li>` adds a new list item; empty tags are cleaned up on save.
 
 ## Caveats and known limitations
 
