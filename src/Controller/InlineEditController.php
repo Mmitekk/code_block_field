@@ -227,7 +227,7 @@ class InlineEditController extends ControllerBase {
       $payload['assets'] = $assets_for_processing;
     }
 
-    $filtered_html = $html;
+    $filtered_html = $this->removeEmptyElements($html);
 
     $field[$delta]->html = $filtered_html;
     if (array_key_exists('css', $payload)) {
@@ -542,6 +542,57 @@ class InlineEditController extends ControllerBase {
     $build['#attached']['library'][] = 'core/drupal.dialog.ajax';
     $build['#title'] = $this->t('Редактировать ссылку');
     return $build;
+  }
+
+  /**
+   * Removes empty elements left by contenteditable editing.
+   *
+   * When the user deletes the text of e.g. an <li>, browsers leave behind
+   * <li class=""><br></li> — a stray blank list item. Such nodes carry no
+   * text and no media children, so they are dropped. Runs iteratively so
+   * nested empties collapse. Elements with id/name hooks are kept (anchor
+   * targets), table cells are kept, and div/span/blockquote with a
+   * meaningful class are kept (layout hooks).
+   *
+   * Regex-based (not DOMDocument) so SVG attribute case is preserved.
+   */
+  protected function removeEmptyElements(string $html): string {
+    if ($html === '') {
+      return $html;
+    }
+    // Tidy attributes first: class="" / style="".
+    $html = (string) preg_replace('/\sclass="\s*"/i', '', $html);
+    $html = (string) preg_replace('/\sstyle="\s*"/i', '', $html);
+    // Drop legacy internal link-picker flag if it was ever saved.
+    $html = (string) preg_replace('/\sdata-cbf-link-id="[^"]*"/i', '', $html);
+    // Elements safe to drop whenever empty (no id/name guard needed —
+    // these tags are never anchor targets or layout hooks).
+    for ($i = 0; $i < 10; $i++) {
+      $new = preg_replace(
+        '/<(li|p|h1|h2|h3|h4|h5|h6|a|strong|em|b|i|u|s|small|label|figcaption)\b(?![^>]*(?:\bid\s*=|\bname\s*=))[^>]*>\s*(?:<br\s*\/?>\s*|&nbsp;|\xC2\xA0|\s)*<\/\1\s*>/i',
+        '',
+        $html
+      );
+      if ($new === NULL || $new === $html) {
+        $html = is_string($new) ? $new : $html;
+        break;
+      }
+      $html = $new;
+    }
+    // div/span/blockquote: only when they carry no hooks at all.
+    for ($i = 0; $i < 10; $i++) {
+      $new = preg_replace(
+        '/<(div|span|blockquote)(?![^>]*(?:\bid\s*=|\bname\s*=|\bclass\s*=\s*"[^"]*\S[^"]*"|\bdata-cbf-asset\b))[^>]*>\s*(?:<br\s*\/?>\s*|&nbsp;|\xC2\xA0|\s)*<\/\1\s*>/i',
+        '',
+        $html
+      );
+      if ($new === NULL || $new === $html) {
+        $html = is_string($new) ? $new : $html;
+        break;
+      }
+      $html = $new;
+    }
+    return $html;
   }
 
   /**

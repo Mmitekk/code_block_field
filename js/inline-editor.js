@@ -1778,41 +1778,147 @@
     if (!state.active) {
       return;
     }
-    const linkKey = a.dataset.cbfLinkId || ('link-' + Math.random().toString(36).slice(2, 9));
-    a.dataset.cbfLinkId = linkKey;
-    const url = Drupal.url('admin/code-block-field/link-picker/' + host.getAttribute('data-cbf-entity-type') + '/' + host.getAttribute('data-cbf-entity-id') + '/' + host.getAttribute('data-cbf-field-name') + '/' + host.getAttribute('data-cbf-delta') + '/' + encodeURIComponent(linkKey));
-    const ajax = Drupal.ajax({
-      url: url,
-      dialogType: 'modal',
-      dialog: { width: 500, title: Drupal.t('Редактировать ссылку') },
+    closeAllPopups();
+    const currentHref = a.getAttribute('href') || '';
+    // Visible text without the pencil handle.
+    let currentText = '';
+    a.childNodes.forEach(function (n) {
+      if (n.nodeType === Node.TEXT_NODE) {
+        currentText += n.textContent;
+      } else if (n.nodeType === Node.ELEMENT_NODE && !n.classList.contains('cbf-link-handle')) {
+        currentText += n.textContent || '';
+      }
     });
-    ajax.execute();
-    document.addEventListener('codeBlockFieldLinkPicked', function onPick(ev) {
-      document.removeEventListener('codeBlockFieldLinkPicked', onPick);
-      const payload = ev.detail || ev.data || null;
-      if (!payload) {
-        return;
+    currentText = currentText.trim();
+    const currentTarget = a.getAttribute('target') === '_blank';
+    const currentRel = a.getAttribute('rel') || '';
+
+    const esc = function (s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); };
+
+    const overlay = document.createElement('div');
+    overlay.className = 'cbf-link-modal-overlay';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:99999;display:flex;align-items:center;justify-content:center;';
+
+    const modal = document.createElement('div');
+    modal.style.cssText = 'background:#fff;border-radius:12px;padding:24px;max-width:500px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;';
+    modal.innerHTML = ''
+      + '<h3 style="margin:0 0 16px;font-size:20px;color:#1e1e2e;">' + Drupal.t('Редактировать ссылку') + '</h3>'
+      + '<div style="margin-bottom:14px;">'
+      + '  <label style="display:block;font-weight:600;margin-bottom:6px;font-size:14px;">URL</label>'
+      + '  <input type="text" id="cbf-link-href" value="' + esc(currentHref) + '" placeholder="https://example.com ' + Drupal.t('или') + ' /about" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;" />'
+      + '</div>'
+      + '<div style="margin-bottom:14px;">'
+      + '  <label style="display:block;font-weight:600;margin-bottom:6px;font-size:14px;">' + Drupal.t('Текст ссылки') + '</label>'
+      + '  <input type="text" id="cbf-link-text" value="' + esc(currentText) + '" placeholder="' + Drupal.t('Оставьте пустым, чтобы сохранить текущий') + '" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;" />'
+      + '</div>'
+      + '<label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;font-size:14px;cursor:pointer;">'
+      + '  <input type="checkbox" id="cbf-link-target"' + (currentTarget ? ' checked' : '') + ' /> ' + Drupal.t('Открывать в новой вкладке')
+      + '</label>'
+      + '<div style="margin-bottom:20px;">'
+      + '  <label style="display:block;font-weight:600;margin-bottom:6px;font-size:14px;">rel</label>'
+      + '  <input type="text" id="cbf-link-rel" value="' + esc(currentRel) + '" placeholder="noopener, nofollow" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;" />'
+      + '</div>'
+      + '<div style="display:flex;gap:12px;justify-content:space-between;align-items:center;">'
+      + '  <button type="button" id="cbf-link-unlink" style="padding:10px 12px;border:none;background:transparent;color:#c00;border-radius:8px;cursor:pointer;font-size:13px;">' + Drupal.t('Убрать ссылку, оставить текст') + '</button>'
+      + '  <div style="display:flex;gap:12px;">'
+      + '    <button type="button" id="cbf-link-cancel" style="padding:10px 20px;border:1px solid #ddd;background:#fff;border-radius:8px;cursor:pointer;font-size:14px;">' + Drupal.t('Отмена') + '</button>'
+      + '    <button type="button" id="cbf-link-apply" style="padding:10px 28px;background:#ff8a3d;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;">' + Drupal.t('Сохранить ссылку') + '</button>'
+      + '  </div>'
+      + '</div>';
+
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    const hrefInput = modal.querySelector('#cbf-link-href');
+    const textInput = modal.querySelector('#cbf-link-text');
+    const targetInput = modal.querySelector('#cbf-link-target');
+    const relInput = modal.querySelector('#cbf-link-rel');
+
+    const close = function () {
+      if (overlay.parentNode) {
+        overlay.parentNode.removeChild(overlay);
       }
-      if (payload.href) {
-        a.setAttribute('href', payload.href);
+      document.removeEventListener('keydown', onKey);
+    };
+    const onKey = function (e) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        close();
+      } else if (e.key === 'Enter' && e.target.tagName === 'INPUT') {
+        e.preventDefault();
+        apply();
       }
-      if (payload.target) {
-        a.setAttribute('target', payload.target);
+    };
+    document.addEventListener('keydown', onKey);
+
+    const setLinkText = function (link, text) {
+      const handle = link.querySelector(':scope > .cbf-link-handle');
+      Array.from(link.childNodes).forEach(function (n) {
+        if (n !== handle) {
+          link.removeChild(n);
+        }
+      });
+      link.insertBefore(document.createTextNode(text), handle || null);
+    };
+
+    const apply = function () {
+      const href = hrefInput.value.trim();
+      const text = textInput.value;
+      if (href) {
+        a.setAttribute('href', href);
+      }
+      if (text !== '' && text !== currentText) {
+        setLinkText(a, text);
+      }
+      if (targetInput.checked) {
+        a.setAttribute('target', '_blank');
+        // Keep rel sane when opening in a new tab.
+        const relVal = relInput.value.trim();
+        if (!relVal && !a.getAttribute('rel')) {
+          a.setAttribute('rel', 'noopener');
+        } else if (relVal) {
+          a.setAttribute('rel', relVal);
+        }
       } else {
         a.removeAttribute('target');
+        const relVal = relInput.value.trim();
+        if (relVal) {
+          a.setAttribute('rel', relVal);
+        } else {
+          a.removeAttribute('rel');
+        }
       }
-      if (payload.rel) {
-        a.setAttribute('rel', payload.rel);
-      } else {
-        a.removeAttribute('rel');
-      }
-      if (payload.text) {
-        a.textContent = payload.text;
-      }
-      state.dirty.add(getInstanceId(host));
-      host.classList.add('cbf-host--dirty');
-      updateSaveButton();
+      markDirty(host);
+      close();
+    };
+
+    modal.querySelector('#cbf-link-apply').addEventListener('click', function (e) {
+      e.preventDefault();
+      apply();
     });
+    modal.querySelector('#cbf-link-cancel').addEventListener('click', function (e) {
+      e.preventDefault();
+      close();
+    });
+    modal.querySelector('#cbf-link-unlink').addEventListener('click', function (e) {
+      e.preventDefault();
+      // Unwrap the link, keep its text.
+      const parent = a.parentNode;
+      if (parent) {
+        const text = textInput.value !== '' ? textInput.value : currentText;
+        parent.insertBefore(document.createTextNode(text), a);
+        parent.removeChild(a);
+        markDirty(host);
+      }
+      close();
+    });
+    overlay.addEventListener('click', function (e) {
+      if (e.target === overlay) {
+        close();
+      }
+    });
+    hrefInput.focus();
+    hrefInput.select();
   }
 
   // -- Save -------------------------------------------------------------------
@@ -1873,6 +1979,11 @@
     clone.querySelectorAll('[data-cbf-bg-image-attached]').forEach(function (el) {
       el.removeAttribute('data-cbf-bg-image-attached');
     });
+    // Legacy internal attr from the old Drupal-modal link picker — must not
+    // be saved to the database.
+    clone.querySelectorAll('[data-cbf-link-id]').forEach(function (el) {
+      el.removeAttribute('data-cbf-link-id');
+    });
     // Remove resize handles (they are siblings of the img, not children).
     clone.querySelectorAll('.cbf-img-resize-handle').forEach(function (h) {
       h.parentNode && h.parentNode.removeChild(h);
@@ -1887,6 +1998,84 @@
     // intended).
     // NOTE: this means resize persists in the saved HTML, which is the
     // desired behaviour.
+
+    // Remove empty elements left by contenteditable (e.g. deleting the text
+    // of an <li> leaves <li class=""><br></li>). An element is "empty" when
+    // it has no text, no media children (img/svg/video/audio/iframe/input/
+    // button) and no linked image — such nodes render as stray blank list
+    // items / paragraphs, so drop them. Runs bottom-up so nested empties
+    // collapse. Table cells are skipped (empty <td> is legitimate).
+    const isEmptyEl = function (el) {
+      if (el.querySelector('img, svg, video, audio, iframe, input, button, object, embed, picture, a[href] img')) {
+        return false;
+      }
+      const text = (el.textContent || '').replace(/ /g, ' ').trim();
+      if (text !== '') {
+        return false;
+      }
+      // <br> placeholders don't count as content.
+      const meaningful = Array.from(el.childNodes).some(function (n) {
+        if (n.nodeType === Node.ELEMENT_NODE) {
+          const tag = n.tagName.toLowerCase();
+          if (tag === 'br') {
+            return false;
+          }
+          // An <a> with href but without text still navigates nowhere
+          // useful inside edited prose — treat as empty unless it wraps
+          // media (checked above).
+          return true;
+        }
+        return false;
+      });
+      return !meaningful;
+    };
+    const hasHook = function (el) {
+      if (el.hasAttribute('id') || el.hasAttribute('name')) {
+        return true;
+      }
+      const cls = (el.getAttribute('class') || '').trim();
+      // Structural hooks (grid, spacers, icons) are kept even when empty.
+      if (cls !== '' && !/^cbf-(editable|edit)/.test(cls)) {
+        return true;
+      }
+      return false;
+    };
+    const emptySel = 'li, p, span, h1, h2, h3, h4, h5, h6, a, strong, em, b, i, u, s, small, label, figcaption, blockquote, div';
+    let removedEmpty = true;
+    let guard = 0;
+    while (removedEmpty && guard < 10) {
+      removedEmpty = false;
+      guard++;
+      const candidates = Array.from(clone.querySelectorAll(emptySel)).reverse();
+      candidates.forEach(function (el) {
+        const tag = el.tagName.toLowerCase();
+        if (tag === 'div' && el.classList.contains('cbf-shadow-content')) {
+          return;
+        }
+        if ((tag === 'div' || tag === 'span' || tag === 'blockquote') && hasHook(el)) {
+          return;
+        }
+        // Never drop the last structural wrapper of a list itself here —
+        // only its items.
+        if (isEmptyEl(el)) {
+          if (el.parentNode) {
+            el.parentNode.removeChild(el);
+            removedEmpty = true;
+          }
+        }
+      });
+    }
+    // Tidy up attributes left behind: class="" / style="".
+    clone.querySelectorAll('[class]').forEach(function (el) {
+      if ((el.getAttribute('class') || '').trim() === '') {
+        el.removeAttribute('class');
+      }
+    });
+    clone.querySelectorAll('[style]').forEach(function (el) {
+      if ((el.getAttribute('style') || '').trim() === '') {
+        el.removeAttribute('style');
+      }
+    });
 
     const html = clone.innerHTML;
     // Build assets map from <img data-cbf-asset="key">.

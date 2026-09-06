@@ -48,7 +48,7 @@ renderer:
 
 # Inline editor (page-builder mode).
 inline_editor:
-  version: 1.4.15
+  version: 1.4.16
   js:
     js/inline-editor.js: { minified: false }
   css:
