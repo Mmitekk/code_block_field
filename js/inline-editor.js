@@ -928,6 +928,98 @@
   }
 
   /**
+   * Applies a text colour to the saved selection range.
+   *
+   * Works purely on savedRange (DOM Range ops) instead of
+   * window.getSelection(): when the native colour picker dialog is open
+   * (notably Firefox's own palette), focus leaves the shadow-root editable
+   * and the live Selection is gone or unusable — but the saved Range still
+   * references live nodes, so colour can be applied repeatedly.
+   *
+   * If the range already sits inside a colour <span> that it fully covers,
+   * the span's colour is overwritten instead of nesting spans endlessly.
+   * After applying, savedRange is refreshed to the coloured content so the
+   * next pick (green → blue) keeps working without reselecting.
+   */
+  function applyForeColor(value) {
+    if (!savedRange || !currentEditRoot) {
+      return;
+    }
+    let range;
+    try {
+      range = savedRange.cloneRange();
+    } catch (e) {
+      return;
+    }
+    if (range.collapsed) {
+      return;
+    }
+    const covers = function (node) {
+      try {
+        const r = document.createRange();
+        r.selectNodeContents(node);
+        return range.compareBoundaryPoints(Range.START_TO_START, r) <= 0
+          && range.compareBoundaryPoints(Range.END_TO_END, r) >= 0;
+      } catch (e) {
+        return false;
+      }
+    };
+    // Reuse the nearest enclosing colour span fully covered by the range.
+    let container = range.commonAncestorContainer;
+    if (container && container.nodeType === Node.TEXT_NODE) {
+      container = container.parentNode;
+    }
+    let node = (container && container.nodeType === Node.ELEMENT_NODE) ? container : null;
+    let recoloured = null;
+    while (node && node !== currentEditRoot && node.getRootNode() === currentEditRoot) {
+      if (node.tagName === 'SPAN' && node.style && node.style.color && covers(node)) {
+        node.style.color = value;
+        recoloured = node;
+        break;
+      }
+      node = node.parentNode;
+    }
+    if (recoloured) {
+      try {
+        const fresh = document.createRange();
+        fresh.selectNodeContents(recoloured);
+        savedRange = fresh;
+      } catch (e) { /* keep the old saved range */ }
+      markDirty(currentEditHost);
+      updateToolbarState();
+      return;
+    }
+    // Otherwise wrap the range contents in a fresh colour span.
+    let wrapper = null;
+    try {
+      wrapper = document.createElement('span');
+      wrapper.style.color = value;
+      range.surroundContents(wrapper);
+    } catch (e) {
+      try {
+        const fragment = range.extractContents();
+        wrapper = document.createElement('span');
+        wrapper.style.color = value;
+        wrapper.appendChild(fragment);
+        range.insertNode(wrapper);
+      } catch (e2) {
+        // eslint-disable-next-line no-console
+        console.warn('foreColor failed:', e2);
+        return;
+      }
+    }
+    if (wrapper) {
+      try {
+        const fresh = document.createRange();
+        fresh.selectNodeContents(wrapper);
+        savedRange = fresh;
+      } catch (e) { /* keep the old saved range */ }
+    }
+    markDirty(currentEditHost);
+    updateToolbarState();
+  }
+
+  /**
    * Restores the saved selection range inside the shadow root. This is
    * called before every format command because clicking a toolbar button
    * moves focus to the button and collapses the selection inside the
@@ -1181,31 +1273,9 @@
       return;
     }
 
-    // For foreColor, we need to wrap the selection in a <span style="color:...">.
+    // For foreColor, colour the saved range directly (see applyForeColor).
     if (cmd === 'foreColor' && value) {
-      const sel = window.getSelection();
-      if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
-        return;
-      }
-      const range = sel.getRangeAt(0);
-      try {
-        const span = document.createElement('span');
-        span.style.color = value;
-        range.surroundContents(span);
-      } catch (e) {
-        try {
-          const fragment = range.extractContents();
-          const span = document.createElement('span');
-          span.style.color = value;
-          span.appendChild(fragment);
-          range.insertNode(span);
-        } catch (e2) {
-          // eslint-disable-next-line no-console
-          console.warn('foreColor failed:', e2);
-        }
-      }
-      markDirty(currentEditHost);
-      updateToolbarState();
+      applyForeColor(value);
       return;
     }
 
