@@ -443,10 +443,22 @@ class InlineEditController extends ControllerBase {
     }
 
     $config = $this->config('code_block_field.settings');
+    // Drupal 10.2+ ships the constraint-based file.validator service; on
+    // Drupal 9.5 – 10.1 only the procedural file_validate() exists, and
+    // requesting the service throws ServiceNotFoundException (500 on every
+    // upload, see CHANGELOG 1.4.15). The is-image validator keeps each
+    // API's native spelling: camelCase for the service era, snake_case for
+    // the procedural function name.
+    $has_validator_service = \Drupal::hasService('file.validator');
     $validators = [
       'file_validate_extensions' => ['gif png jpg jpeg webp svg'],
-      'file_validate_isImage' => [],
     ];
+    if ($has_validator_service) {
+      $validators['file_validate_isImage'] = [];
+    }
+    else {
+      $validators['file_validate_is_image'] = [];
+    }
     $max = $config->get('max_filesize');
     if ($max) {
       $validators['file_validate_size'] = [Bytes::toNumber($max)];
@@ -471,12 +483,17 @@ class InlineEditController extends ControllerBase {
       return new JsonResponse(['error' => 'Could not save uploaded file.'], 500);
     }
 
-    $violations = \Drupal::service('file.validator')->validate($uploaded, $validators);
     $errors = [];
-    if ($violations) {
+    if ($has_validator_service) {
+      // Drupal 10.2+ / 11: ConstraintViolationList of violation objects.
+      $violations = \Drupal::service('file.validator')->validate($uploaded, $validators);
       foreach ($violations as $violation) {
         $errors[] = $violation->getMessage();
       }
+    }
+    else {
+      // Drupal 9.5 – 10.1: plain array of error strings.
+      $errors = file_validate($uploaded, $validators);
     }
     if ($errors) {
       $uploaded->delete();

@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.15] — 2026-11-13
+
+### Fixed
+
+- **500-ошибка при загрузке изображения на Drupal 9.5** (инлайн-редактор,
+  кнопка «Применить» в окне выбора картинки). Endpoint
+  `/admin/code-block-field/image-upload` безусловно запрашивал сервис
+  `file.validator`, который появился только в **Drupal 10.2**. На Drupal
+  9.5 это падало с `ServiceNotFoundException: You have requested a
+  non-existent service "file.validator"` прямо при загрузке файла.
+
+  Теперь валидация загруженного файла идёт по обеим веткам ядра:
+  - **Drupal 10.2+** — как раньше, через сервис `file.validator`
+    (ConstraintViolationList), поведение не изменилось;
+  - **Drupal 9.5 – 10.1** — через процедурный `file_validate()`
+    (snake_case-ключ `file_validate_is_image`), который на этих версиях
+    возвращает обычный массив строк ошибок.
+
+  Выбор ветки — по `Drupal::hasService('file.validator')`.
+
 ## [1.4.14] — 2026-07-20
 
 ### Added
