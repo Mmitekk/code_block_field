@@ -21,3 +21,9 @@ drush/
 # Test artefacts
 .phpunit.result.cache
 *.log
+
+# Foreign files that snuck into the repo in July 2026 and were removed in 1.5.1.
+# Keep them out so agent sessions cannot re-commit them.
+skills/
+upload/
+.env

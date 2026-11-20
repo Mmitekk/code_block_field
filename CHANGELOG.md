@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.1] — 2026-11-20
+
+### Removed
+
+- **Посторонние файлы убраны из репозитория** (попали 02.07.2026 агент-сеансом
+  с UUID-коммитами): каталог `skills/` (1005 файлов — скиллы design/pdf/pptx),
+  каталог `upload/` (вставленные скриншоты) и `.env` от панели git.be1st.pro
+  (путь к SQLite, секретов нет). Модуль стал компактнее: composer-пакет больше
+  не тащит ~1000 чужих файлов. Всё это по-прежнему доступно в истории git;
+  пути добавлены в `.gitignore`, чтобы не вернулись.
+
 ## [1.5.0] — 2026-11-20
 
 ### Added
