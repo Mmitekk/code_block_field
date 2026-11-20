@@ -2407,8 +2407,10 @@
 
   /**
    * Injects the ⋮ actions button + dropdown into the block's SHADOW ROOT
-   * (outside .cbf-shadow-content). Skips when the action endpoint is not
-   * configured (e.g. old backend) or the host carries no entity context.
+   * (outside .cbf-shadow-content). «Скопировать код» works purely
+   * client-side and is always offered; «Клонировать»/«Удалить» need the
+   * action endpoint (configured since 1.6.0 — absent when the backend PHP
+   * is older, e.g. stale opcache) and unlimited cardinality.
    */
   function injectBlockActions(host) {
     const entry = getRegistryEntry(host);
@@ -2421,9 +2423,8 @@
     }
     const settings = (drupalSettings && drupalSettings.code_block_field) || {};
     const endpoints = settings.endpoints || {};
-    if (!endpoints.action || !host.getAttribute('data-cbf-entity-type')) {
-      return;
-    }
+    const canAct = !!endpoints.action && !!host.getAttribute('data-cbf-entity-type');
+    const canMutate = canAct && host.getAttribute('data-cbf-multiple') === '1';
 
     const wrap = document.createElement('div');
     wrap.className = 'cbf-block-actions';
@@ -2472,9 +2473,10 @@
     });
 
     menu.appendChild(copyBtn);
-    // Clone / delete only make sense for fields with unlimited cardinality
-    // (the backend refuses them for single-value fields).
-    if (host.getAttribute('data-cbf-multiple') === '1') {
+    // Clone / delete need the action endpoint and only make sense for
+    // fields with unlimited cardinality (the backend refuses them for
+    // single-value fields).
+    if (canMutate) {
       menu.appendChild(cloneBtn);
       menu.appendChild(deleteBtn);
     }
