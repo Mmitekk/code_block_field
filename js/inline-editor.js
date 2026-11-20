@@ -1546,8 +1546,45 @@
       items.push({ label: Drupal.t('Заменить изображение'), action: function () { openImagePicker(host, img); } });
       items.push({ label: Drupal.t('Загрузить по URL…'), action: function () { uploadFromUrl(host, img); } });
     }
+    items.push({ label: Drupal.t('Скопировать код изображения'), action: function () {
+      copyTextToClipboard(cleanElementForOutput(img).outerHTML).then(function () {
+        setHint(Drupal.t('Код изображения скопирован.'));
+      }).catch(function () {
+        window.alert(Drupal.t('Не удалось скопировать код в буфер обмена.'));
+      });
+    } });
+    items.push({ label: Drupal.t('Клонировать изображение'), action: function () {
+      const dup = cleanElementForOutput(img);
+      img.insertAdjacentElement('afterend', dup);
+      markDirty(host);
+      setHint(Drupal.t('Изображение склонировано — не забудьте «Сохранить».'));
+    } });
     items.push({ label: Drupal.t('Редактировать alt-текст'), action: function () { editImageAltOnTheSpot(host, img); } });
     items.push({ sep: true });
+    // Код карточки/контейнера, в которой лежит картинка: ближайший
+    // осмысленный предок (с собственным классом и текстом).
+    const entry = getRegistryEntry(host);
+    const contentDiv = entry && entry.shadowRoot
+      ? entry.shadowRoot.querySelector('.cbf-shadow-content')
+      : null;
+    const container = contentDiv ? nearestContentWrapper(img, contentDiv) : null;
+    if (container) {
+      const containerLabel = elementMenuLabel(container);
+      items.push({ label: Drupal.t('Скопировать код контейнера @tag', { '@tag': containerLabel }), action: function () {
+        copyTextToClipboard(cleanElementForOutput(container).outerHTML).then(function () {
+          setHint(Drupal.t('Код контейнера скопирован.'));
+        }).catch(function () {
+          window.alert(Drupal.t('Не удалось скопировать код в буфер обмена.'));
+        });
+      } });
+      items.push({ label: Drupal.t('Клонировать контейнер @tag', { '@tag': containerLabel }), action: function () {
+        const dup = cleanElementForOutput(container);
+        container.insertAdjacentElement('afterend', dup);
+        markDirty(host);
+        setHint(Drupal.t('Контейнер склонирован — не забудьте «Сохранить».'));
+      } });
+      items.push({ sep: true });
+    }
     items.push({ label: Drupal.t('Сбросить размер'), action: function () {
       img.style.width = '';
       img.style.height = '';
@@ -2692,6 +2729,10 @@
       delete n.dataset.cbfOverlayAttached;
       delete n.dataset.cbfLinkHandleAttached;
       delete n.dataset.cbfBgImageAttached;
+      // Пустой class="" остаётся после снятия cbf-классов — убрать.
+      if (!n.getAttribute('class')) {
+        n.removeAttribute('class');
+      }
     });
     return clone;
   }
@@ -2704,6 +2745,37 @@
         return el;
       }
       el = el.parentElement;
+    }
+    return null;
+  }
+
+  /**
+   * Short label for the element menu header: `<div.rc-card>`. cbf-* classes
+   * (the module's own) are hidden.
+   */
+  function elementMenuLabel(el) {
+    const tag = el.tagName.toLowerCase();
+    const cls = (el.getAttribute('class') || '').trim().split(/\s+/)
+      .filter(function (c) { return c.indexOf('cbf-') !== 0; })
+      .slice(0, 2).join('.');
+    return '<' + tag + (cls ? '.' + cls : '') + '>';
+  }
+
+  /**
+   * Nearest meaningful ancestor of an element (used for images: the card /
+   * section that wraps them). "Meaningful" = has own non-cbf classes and
+   * some text content, so bare image wrappers are skipped.
+   */
+  function nearestContentWrapper(el, contentDiv) {
+    let node = el.parentElement;
+    while (node && node !== contentDiv) {
+      const classes = (node.getAttribute('class') || '').trim().split(/\s+/).filter(function (c) {
+        return c && c.indexOf('cbf-') !== 0;
+      });
+      if (classes.length && node.textContent.trim().length > 0) {
+        return node;
+      }
+      node = node.parentElement;
     }
     return null;
   }
@@ -2726,12 +2798,9 @@
     menu.className = 'cbf-element-menu';
 
     const tag = el.tagName.toLowerCase();
-    const cls = (el.getAttribute('class') || '').trim().split(/\s+/)
-      .filter(function (c) { return c.indexOf('cbf-') !== 0; })
-      .slice(0, 2).join('.');
     const head = document.createElement('div');
     head.className = 'cbf-element-menu__head';
-    head.textContent = '<' + tag + (cls ? '.' + cls : '') + '>';
+    head.textContent = elementMenuLabel(el);
     menu.appendChild(head);
 
     const copyBtn = document.createElement('button');
@@ -2765,6 +2834,22 @@
         setHint(Drupal.t('Элемент склонирован — не забудьте «Сохранить».'));
       });
       menu.appendChild(cloneBtn);
+
+      const deleteBtn = document.createElement('button');
+      deleteBtn.type = 'button';
+      deleteBtn.className = 'cbf-element-menu__item cbf-element-menu__item--danger';
+      deleteBtn.textContent = Drupal.t('Удалить элемент');
+      deleteBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        if (!window.confirm(Drupal.t('Удалить этот элемент? Изменение попадёт в блок — не забудьте «Сохранить».'))) {
+          return;
+        }
+        el.parentNode && el.parentNode.removeChild(el);
+        closeElementMenu();
+        markDirty(host);
+        setHint(Drupal.t('Элемент удалён — не забудьте «Сохранить».'));
+      });
+      menu.appendChild(deleteBtn);
     }
 
     document.body.appendChild(menu);

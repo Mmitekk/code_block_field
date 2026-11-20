@@ -289,3 +289,9 @@ body.cbf-inline-editing {
 .cbf-element-menu__item:focus {
   background: #eef3f9;
 }
+
+.cbf-element-menu__item--danger:hover,
+.cbf-element-menu__item--danger:focus {
+  background: #fdeaea;
+  color: #a11212;
+}
