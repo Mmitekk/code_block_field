@@ -2472,8 +2472,12 @@
     });
 
     menu.appendChild(copyBtn);
-    menu.appendChild(cloneBtn);
-    menu.appendChild(deleteBtn);
+    // Clone / delete only make sense for fields with unlimited cardinality
+    // (the backend refuses them for single-value fields).
+    if (host.getAttribute('data-cbf-multiple') === '1') {
+      menu.appendChild(cloneBtn);
+      menu.appendChild(deleteBtn);
+    }
 
     toggle.addEventListener('click', function (e) {
       e.preventDefault();
@@ -2636,13 +2640,180 @@
         location.reload();
         return;
       }
-      const error = (res.json && res.json.error) ? res.json.error : 'HTTP ' + res.status;
+      const rawError = (res.json && res.json.error) ? res.json.error : 'HTTP ' + res.status;
+      // Человекопонятная подсказка для самого частого случая: поле с
+      // одиночной кратностью не принимает новые дельты.
+      const error = rawError.indexOf('does not allow adding or removing') !== -1
+        ? Drupal.t('У поля одиночная кратность — добавлять и убирать блоки можно только у полей с «Неограниченно» в настройках хранения поля.')
+        : rawError;
       setHint('');
       window.alert(Drupal.t('Не удалось выполнить действие: @error', { '@error': error }));
     }).catch(function (err) {
       setHint('');
       window.alert(Drupal.t('Не удалось выполнить действие: @error', { '@error': err.message || err }));
     });
+  }
+
+  // -- Per-element actions (right-click inside a block) -----------------------
+
+  // Elements the right-click menu considers "meaningful": the menu walks up
+  // from the exact target to the nearest match, so a right-click on text
+  // inside an <li> offers the <li>, on a card text — the card <div>.
+  const ELEMENT_PICK_SELECTOR = 'li, dt, dd, tr, td, th, thead, tbody, tfoot, table, '
+    + 'p, h1, h2, h3, h4, h5, h6, blockquote, figure, figcaption, img, '
+    + 'ul, ol, dl, section, article, aside, nav, header, footer, form, div';
+
+  /**
+   * Deep-clones an element and strips every edit-mode decoration
+   * (contenteditable attributes, link/image handles, helper classes), so
+   * the result is clean HTML ready for output or for re-insertion.
+   */
+  function cleanElementForOutput(el) {
+    const clone = el.cloneNode(true);
+    if (clone.nodeType !== 1) {
+      return clone;
+    }
+    clone.removeAttribute('contenteditable');
+    clone.removeAttribute('spellcheck');
+    clone.classList.remove('cbf-editable');
+    clone.querySelectorAll('[contenteditable]').forEach(function (n) {
+      n.removeAttribute('contenteditable');
+      n.removeAttribute('spellcheck');
+    });
+    clone.querySelectorAll('.cbf-link-handle, .cbf-img-resize-handle').forEach(function (n) {
+      n.parentNode && n.parentNode.removeChild(n);
+    });
+    clone.querySelectorAll('.cbf-editable, .cbf-editable-image, .cbf-editable-link, .cbf-editable-bg-image').forEach(function (n) {
+      n.classList.remove('cbf-editable', 'cbf-editable-image', 'cbf-editable-link', 'cbf-editable-bg-image');
+    });
+    clone.querySelectorAll('[data-cbf-overlay-attached], [data-cbf-link-handle-attached], [data-cbf-bg-image-attached]').forEach(function (n) {
+      delete n.dataset.cbfOverlayAttached;
+      delete n.dataset.cbfLinkHandleAttached;
+      delete n.dataset.cbfBgImageAttached;
+    });
+    return clone;
+  }
+
+  /** Walks up from the exact target to the nearest meaningful element. */
+  function pickActionElement(root, target) {
+    let el = target;
+    while (el && el !== root) {
+      if (el.matches && el.matches(ELEMENT_PICK_SELECTOR)) {
+        return el;
+      }
+      el = el.parentElement;
+    }
+    return null;
+  }
+
+  /** Removes any open element context menu. */
+  function closeElementMenu() {
+    document.querySelectorAll('.cbf-element-menu').forEach(function (m) {
+      m.parentNode && m.parentNode.removeChild(m);
+    });
+  }
+
+  /**
+   * Right-click menu for an arbitrary element inside a block: copy its
+   * HTML or clone it in place (the clone lands next to the original and
+   * marks the block dirty — save persists it).
+   */
+  function openElementMenu(host, el, x, y) {
+    closeElementMenu();
+    const menu = document.createElement('div');
+    menu.className = 'cbf-element-menu';
+
+    const tag = el.tagName.toLowerCase();
+    const cls = (el.getAttribute('class') || '').trim().split(/\s+/)
+      .filter(function (c) { return c.indexOf('cbf-') !== 0; })
+      .slice(0, 2).join('.');
+    const head = document.createElement('div');
+    head.className = 'cbf-element-menu__head';
+    head.textContent = '<' + tag + (cls ? '.' + cls : '') + '>';
+    menu.appendChild(head);
+
+    const copyBtn = document.createElement('button');
+    copyBtn.type = 'button';
+    copyBtn.className = 'cbf-element-menu__item';
+    copyBtn.textContent = Drupal.t('Скопировать код');
+    copyBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      copyTextToClipboard(cleanElementForOutput(el).outerHTML).then(function () {
+        copyBtn.textContent = Drupal.t('Скопировано ✓');
+        setTimeout(closeElementMenu, 700);
+      }).catch(function () {
+        window.alert(Drupal.t('Не удалось скопировать код в буфер обмена.'));
+        closeElementMenu();
+      });
+    });
+    menu.appendChild(copyBtn);
+
+    // <img> has no meaningful "clone next to itself" in most layouts.
+    if (tag !== 'img') {
+      const cloneBtn = document.createElement('button');
+      cloneBtn.type = 'button';
+      cloneBtn.className = 'cbf-element-menu__item';
+      cloneBtn.textContent = Drupal.t('Клонировать элемент');
+      cloneBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        const dup = cleanElementForOutput(el);
+        el.insertAdjacentElement('afterend', dup);
+        closeElementMenu();
+        markDirty(host);
+        setHint(Drupal.t('Элемент склонирован — не забудьте «Сохранить».'));
+      });
+      menu.appendChild(cloneBtn);
+    }
+
+    document.body.appendChild(menu);
+    const rect = menu.getBoundingClientRect();
+    menu.style.left = Math.max(4, Math.min(x, window.innerWidth - rect.width - 8)) + 'px';
+    menu.style.top = Math.max(4, Math.min(y, window.innerHeight - rect.height - 8)) + 'px';
+  }
+
+  /**
+   * contextmenu handler (document-level, edit mode only). Right-clicks
+   * cross the shadow boundary, so the real target is taken from
+   * composedPath() — e.target at this level is the retargeted host.
+   */
+  function onInlineContextMenu(e) {
+    if (!state.active) {
+      return;
+    }
+    const path = typeof e.composedPath === 'function' ? e.composedPath() : [];
+    if (!path.length) {
+      return;
+    }
+    const innermost = path.find(function (n) { return n.nodeType === 1; });
+    let contentDiv = null;
+    let host = null;
+    for (const n of path) {
+      if (n.nodeType !== 1 || !n.classList) {
+        continue;
+      }
+      if (!contentDiv && n.classList.contains('cbf-shadow-content')) {
+        contentDiv = n;
+      }
+      if (n.classList.contains('cbf-host')) {
+        host = n;
+        break;
+      }
+    }
+    if (!host || !contentDiv || !innermost) {
+      return;
+    }
+    // Our own action menus: keep the browser default (they have their own
+    // interaction, and copying them makes no sense).
+    if (innermost.closest && (innermost.closest('.cbf-block-actions'))) {
+      return;
+    }
+    const el = pickActionElement(contentDiv, innermost);
+    if (!el || el === contentDiv) {
+      return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    openElementMenu(host, el, e.clientX, e.clientY);
   }
 
   // -- Behaviour --------------------------------------------------------------
@@ -2654,16 +2825,21 @@
         const hasInline = document.querySelector('.cbf-host--inline-enabled.cbf-host--mounted');
         if (hasInline && once('cbf-toolbar', 'body').length) {
           buildToolbar();
-          // Close per-block actions dropdowns on outside click / Escape.
+          // Right-click menu for arbitrary elements inside blocks.
+          document.addEventListener('contextmenu', onInlineContextMenu);
+          // Close per-block actions dropdowns and the element menu on
+          // outside click / Escape.
           document.addEventListener('click', function (e) {
             if (e.target && e.target.closest && e.target.closest('.cbf-block-actions')) {
               return;
             }
             closeBlockMenus();
+            closeElementMenu();
           });
           document.addEventListener('keydown', function (e) {
             if (e.key === 'Escape') {
               closeBlockMenus();
+              closeElementMenu();
             }
           });
         }

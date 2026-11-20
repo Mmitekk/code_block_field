@@ -6,6 +6,7 @@ namespace Drupal\code_block_field\Plugin\Field\FieldFormatter;
 
 use Drupal\Component\Utility\Html;
 use Drupal\Core\Field\FieldItemListInterface;
+use Drupal\Core\Field\FieldStorageDefinitionInterface;
 use Drupal\Core\Field\FormatterBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Url;
@@ -160,6 +161,9 @@ class CodeBlockFormatter extends FormatterBase {
         '#shadow_mode' => $shadow_mode,
         '#inline_enabled' => $inline_enabled,
         '#priority' => $priority,
+        // Whether the field storage accepts new items — the inline editor
+        // hides the clone/delete actions for single-value fields.
+        '#multiple' => $this->fieldDefinition->getFieldStorageDefinition()->getCardinality() === FieldStorageDefinitionInterface::CARDINALITY_UNLIMITED,
         // CSS pre-processed server-side for the Declarative Shadow DOM
         // template. The theme-variable bridge (--var: inherit) is still
         // injected client-side by renderer.js (it needs getComputedStyle).

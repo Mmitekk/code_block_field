@@ -29,7 +29,8 @@
   data-cbf-delta="{{ delta }}"
   data-cbf-langcode="{{ langcode }}"
   data-cbf-shadow-mode="{{ shadow_mode }}"
-  {% if priority %}data-cbf-priority="1"{% endif %}>
+  {% if priority %}data-cbf-priority="1"{% endif %}
+  {% if multiple %}data-cbf-multiple="1"{% endif %}>
   {% if priority %}
     {#
       Declarative Shadow DOM. The browser turns this <template> into a real
