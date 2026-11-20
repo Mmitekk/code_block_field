@@ -2,12 +2,13 @@
  * Styling for the entity-edit-form widget.
  */
 .code-block-field-widget {
+  position: relative;
   margin-bottom: 1em;
 }
 
 .code-block-field-widget > summary {
   font-weight: bold;
-  padding: 0.5em 1em;
+  padding: 0.5em 2.8em 0.5em 1em;
   background: #f5f7fa;
   border-radius: 4px 4px 0 0;
 }
@@ -22,4 +23,80 @@
   border-radius: 3px;
   font-family: "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
   font-size: 0.9em;
+}
+
+/**
+ * Per-block actions (copy code / clone / delete).
+ */
+.cbf-actions {
+  position: absolute;
+  top: 0.25em;
+  right: 0.4em;
+  z-index: 50;
+}
+
+.cbf-actions-toggle {
+  display: inline-block;
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: #555;
+  font-size: 1.25em;
+  line-height: 1;
+  padding: 0.15em 0.5em;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.cbf-actions-toggle:hover,
+.cbf-actions-toggle:focus {
+  background: rgba(0, 0, 0, 0.09);
+  color: #111;
+}
+
+.cbf-actions-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.3em);
+  min-width: 190px;
+  padding: 0.3em 0;
+  background: #fff;
+  border: 1px solid #c9ccd1;
+  border-radius: 6px;
+  box-shadow: 0 5px 16px rgba(0, 0, 0, 0.18);
+  z-index: 60;
+}
+
+.cbf-actions-menu .cbf-actions-item {
+  display: block !important;
+  width: 100% !important;
+  appearance: none !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  margin: 0 !important;
+  padding: 0.45em 1em !important;
+  text-align: left !important;
+  font-size: 0.95em !important;
+  font-weight: normal !important;
+  line-height: 1.4 !important;
+  color: #1d1d1d !important;
+  cursor: pointer;
+}
+
+.cbf-actions-menu .cbf-actions-item:hover,
+.cbf-actions-menu .cbf-actions-item:focus {
+  background: #eef3f9 !important;
+}
+
+.cbf-actions-menu .cbf-item-danger:hover,
+.cbf-actions-menu .cbf-item-danger:focus {
+  background: #fdeaea !important;
+  color: #a11212 !important;
+}
+
+.cbf-actions-menu .cbf-actions-item.is-copied {
+  color: #0a7d32 !important;
+  font-weight: bold !important;
 }

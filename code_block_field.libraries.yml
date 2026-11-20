@@ -25,7 +25,7 @@ codemirror:
 
 # Backend widget (entity edit form).
 widget:
-  version: 1.4.15
+  version: 1.5.0
   js:
     js/widget.js: { minified: false }
   css:
