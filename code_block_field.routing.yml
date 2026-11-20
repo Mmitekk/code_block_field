@@ -18,6 +18,18 @@ code_block_field.inline_save:
   options:
     _csrf_token: TRUE
 
+# Inline action endpoint — clones or deletes a field delta (per-block menu).
+code_block_field.inline_action:
+  path: '/admin/code-block-field/inline-action'
+  defaults:
+    _controller: '\Drupal\code_block_field\Controller\InlineEditController::action'
+  methods:
+    - POST
+  requirements:
+    _custom_access: '\Drupal\code_block_field\Controller\InlineEditController::accessAction'
+  options:
+    _csrf_token: TRUE
+
 # Image upload endpoint for inline editor.
 code_block_field.image_upload:
   path: '/admin/code-block-field/image-upload'

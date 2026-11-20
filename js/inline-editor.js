@@ -510,6 +510,13 @@
       }
     } catch (e) { console.error('CBF enableEditing insert-btn:', e); }
 
+    // 6b. Per-block actions (⋮ menu: copy code / clone / delete). The
+    // container lives in the HOST light DOM (like the insert-image button),
+    // so it never leaks into the saved block HTML.
+    try {
+      injectBlockActions(host);
+    } catch (e) { console.error('CBF enableEditing block-actions:', e); }
+
     // 7. DELAYED RE-SCAN — re-run image/link/bg-image attachment after
     // 200ms. This catches elements that weren't in the Shadow DOM on
     // the first pass (e.g. if the block's JS dynamically injected
@@ -605,6 +612,13 @@
     // Remove insert-image button.
     host.querySelectorAll('.cbf-insert-img-btn').forEach(function (b) {
       b.parentNode && b.parentNode.removeChild(b);
+    });
+    // Remove per-block actions menu (⋮) and its shadow styles.
+    root.querySelectorAll('.cbf-block-actions').forEach(function (w) {
+      w.parentNode && w.parentNode.removeChild(w);
+    });
+    root.querySelectorAll('style.cbf-block-actions-styles').forEach(function (s) {
+      s.parentNode && s.parentNode.removeChild(s);
     });
     // Hide any open context menus / alt editors / format toolbar.
     closeAllPopups();
@@ -2069,8 +2083,8 @@
   // `options: _csrf_token: TRUE` are validated by CsrfAccessCheck from the
   // query string; the X-CSRF-Token header alone is not enough on all
   // Drupal versions. We send both (query + header) for compatibility.
-  function withCsrfToken(url) {
-    const token = drupalSettings && drupalSettings.code_block_field && drupalSettings.code_block_field.csrf_token;
+  function withCsrfToken(url, tokenOverride) {
+    const token = tokenOverride || (drupalSettings && drupalSettings.code_block_field && drupalSettings.code_block_field.csrf_token);
     if (!token || !url || url.indexOf('token=') !== -1) {
       return url;
     }
@@ -2364,6 +2378,273 @@
     });
   }
 
+  // -- Per-block actions (⋮ menu: copy code / clone / delete) -----------------
+
+  // Styles for the actions UI. They must be injected INTO the shadow root —
+  // an external stylesheet cannot reach inside, and the host's light DOM
+  // children do not render at all (a host always renders its shadow tree).
+  // The container is appended to the shadow root but OUTSIDE the
+  // .cbf-shadow-content element, so it never leaks into the saved HTML
+  // (collectPayload serialises .cbf-shadow-content only).
+  const BLOCK_ACTIONS_CSS = [
+    '.cbf-block-actions { position: absolute; top: 30px; right: 4px; z-index: 6; }',
+    '.cbf-block-actions__toggle { appearance: none; border: 1px solid rgba(255,255,255,.25);',
+    '  background: rgba(15,17,32,.85); color: #fff; font-size: 15px; line-height: 1;',
+    '  width: 26px; height: 26px; padding: 0; border-radius: 6px; cursor: pointer; }',
+    '.cbf-block-actions__toggle:hover, .cbf-block-actions__toggle:focus { background: rgba(15,17,32,.98); }',
+    '.cbf-block-actions__menu { position: absolute; right: 0; top: calc(100% + 4px);',
+    '  min-width: 185px; padding: .3em 0; background: #fff; border: 1px solid #c9ccd1;',
+    '  border-radius: 8px; box-shadow: 0 5px 16px rgba(0,0,0,.22); z-index: 7; }',
+    '.cbf-block-actions__item { display: block; width: 100%; appearance: none;',
+    '  background: transparent; border: none; box-shadow: none; margin: 0; padding: .45em 1em;',
+    '  text-align: left; font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;',
+    '  color: #1d1d1d; cursor: pointer; }',
+    '.cbf-block-actions__item:hover, .cbf-block-actions__item:focus { background: #eef3f9; }',
+    '.cbf-block-actions__item--danger:hover, .cbf-block-actions__item--danger:focus {',
+    '  background: #fdeaea; color: #a11212; }',
+    '.cbf-block-actions__item--copied { color: #0a7d32; font-weight: bold; }',
+  ].join('\n');
+
+  /**
+   * Injects the ⋮ actions button + dropdown into the block's SHADOW ROOT
+   * (outside .cbf-shadow-content). Skips when the action endpoint is not
+   * configured (e.g. old backend) or the host carries no entity context.
+   */
+  function injectBlockActions(host) {
+    const entry = getRegistryEntry(host);
+    if (!entry || !entry.shadowRoot) {
+      return;
+    }
+    const root = entry.shadowRoot;
+    if (root.querySelector('.cbf-block-actions')) {
+      return;
+    }
+    const settings = (drupalSettings && drupalSettings.code_block_field) || {};
+    const endpoints = settings.endpoints || {};
+    if (!endpoints.action || !host.getAttribute('data-cbf-entity-type')) {
+      return;
+    }
+
+    const wrap = document.createElement('div');
+    wrap.className = 'cbf-block-actions';
+    wrap.setAttribute('contenteditable', 'false');
+
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'cbf-block-actions__toggle';
+    toggle.title = Drupal.t('Действия с блоком');
+    toggle.setAttribute('aria-haspopup', 'true');
+    toggle.setAttribute('aria-expanded', 'false');
+    toggle.textContent = '⋮';
+
+    const menu = document.createElement('div');
+    menu.className = 'cbf-block-actions__menu';
+    menu.hidden = true;
+
+    const copyBtn = document.createElement('button');
+    copyBtn.type = 'button';
+    copyBtn.className = 'cbf-block-actions__item';
+    copyBtn.textContent = Drupal.t('Скопировать код');
+    copyBtn.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      copyBlockCode(host, copyBtn);
+    });
+
+    const cloneBtn = document.createElement('button');
+    cloneBtn.type = 'button';
+    cloneBtn.className = 'cbf-block-actions__item';
+    cloneBtn.textContent = Drupal.t('Клонировать');
+    cloneBtn.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      runBlockAction(host, 'clone');
+    });
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'cbf-block-actions__item cbf-block-actions__item--danger';
+    deleteBtn.textContent = Drupal.t('Удалить');
+    deleteBtn.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      runBlockAction(host, 'delete');
+    });
+
+    menu.appendChild(copyBtn);
+    menu.appendChild(cloneBtn);
+    menu.appendChild(deleteBtn);
+
+    toggle.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      const willOpen = menu.hidden;
+      closeBlockMenus();
+      if (willOpen) {
+        menu.hidden = false;
+        toggle.setAttribute('aria-expanded', 'true');
+      }
+    });
+
+    wrap.appendChild(toggle);
+    wrap.appendChild(menu);
+
+    if (!root.querySelector('style.cbf-block-actions-styles')) {
+      const style = document.createElement('style');
+      style.className = 'cbf-block-actions-styles';
+      style.textContent = BLOCK_ACTIONS_CSS;
+      root.appendChild(style);
+    }
+    root.appendChild(wrap);
+  }
+
+  /** Closes every open per-block actions dropdown (menus live in shadows). */
+  function closeBlockMenus() {
+    document.querySelectorAll('.cbf-host--inline-enabled.cbf-host--mounted').forEach(function (host) {
+      const entry = window.codeBlockFieldRegistry && window.codeBlockFieldRegistry[host.getAttribute('data-cbf-instance')];
+      const root = entry && entry.shadowRoot;
+      if (!root) {
+        return;
+      }
+      root.querySelectorAll('.cbf-block-actions__menu:not([hidden])').forEach(function (m) {
+        m.hidden = true;
+      });
+      root.querySelectorAll('.cbf-block-actions__toggle[aria-expanded="true"]').forEach(function (t) {
+        t.setAttribute('aria-expanded', 'false');
+      });
+    });
+  }
+
+  /** Copies text to the clipboard with an execCommand fallback. */
+  function copyTextToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+    return new Promise(function (resolve, reject) {
+      const helper = document.createElement('textarea');
+      helper.value = text;
+      helper.setAttribute('readonly', '');
+      helper.style.position = 'fixed';
+      helper.style.opacity = '0';
+      document.body.appendChild(helper);
+      helper.select();
+      let ok = false;
+      try {
+        ok = document.execCommand('copy');
+      } catch (e) {
+        ok = false;
+      }
+      document.body.removeChild(helper);
+      if (ok) {
+        resolve();
+      } else {
+        reject(new Error('execCommand copy failed'));
+      }
+    });
+  }
+
+  /**
+   * «Скопировать код»: HTML of the block as it looks right now (including
+   * unsaved edits), plus CSS/JS sections when non-empty. Keeps the menu
+   * open for a moment to show the «Скопировано ✓» feedback.
+   */
+  function copyBlockCode(host, itemBtn) {
+    const data = collectPayload(host);
+    if (!data) {
+      window.alert(Drupal.t('Не удалось собрать код блока.'));
+      return;
+    }
+    const parts = [data.html || ''];
+    if ((data.css || '').trim()) {
+      parts.push('<!-- CSS -->\n' + data.css);
+    }
+    if ((data.js || '').trim()) {
+      parts.push('<!-- JS -->\n' + data.js);
+    }
+    copyTextToClipboard(parts.join('\n\n')).then(function () {
+      const original = itemBtn.textContent;
+      itemBtn.textContent = Drupal.t('Скопировано ✓');
+      itemBtn.classList.add('cbf-block-actions__item--copied');
+      setTimeout(function () {
+        itemBtn.textContent = original;
+        itemBtn.classList.remove('cbf-block-actions__item--copied');
+        closeBlockMenus();
+      }, 1200);
+    }).catch(function () {
+      window.alert(Drupal.t('Не удалось скопировать код в буфер обмена.'));
+    });
+  }
+
+  /**
+   * «Клонировать» / «Удалить»: POSTs the delta action to the backend and
+   * reloads the page so the server re-renders the blocks with fresh
+   * numbering. Unsaved edits anywhere on the page would be lost on the
+   * reload, hence the extra warning.
+   */
+  function runBlockAction(host, action) {
+    const settings = (drupalSettings && drupalSettings.code_block_field) || {};
+    const endpoints = settings.endpoints || {};
+    if (!endpoints.action) {
+      console.error('Code Block Field: action endpoint not configured.');
+      return;
+    }
+
+    let message;
+    if (action === 'delete') {
+      message = Drupal.t('Удалить этот блок? Изменение сохранится в ноду сразу.');
+    } else {
+      message = Drupal.t('Клонировать этот блок? Изменение сохранится в ноду сразу.');
+    }
+    if (state.dirty.size > 0) {
+      message = Drupal.t('На странице есть несохранённые правки — обновление страницы их потеряет.') + '\n\n' + message;
+    }
+    if (!window.confirm(message)) {
+      return;
+    }
+
+    setHint(Drupal.t('Применяем…'));
+
+    const payload = {
+      entity_type: host.getAttribute('data-cbf-entity-type'),
+      entity_id: parseInt(host.getAttribute('data-cbf-entity-id'), 10),
+      field_name: host.getAttribute('data-cbf-field-name'),
+      delta: parseInt(host.getAttribute('data-cbf-delta'), 10),
+      langcode: host.getAttribute('data-cbf-langcode'),
+      action: action,
+    };
+    const token = settings.csrf_token_action || '';
+    fetch(withCsrfToken(endpoints.action, token), {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': token,
+      },
+      body: JSON.stringify(payload),
+    }).then(function (r) {
+      return r.text().then(function (text) {
+        let json = null;
+        try {
+          json = JSON.parse(text);
+        } catch (e) {
+          json = null;
+        }
+        return { ok: r.ok, status: r.status, json: json };
+      });
+    }).then(function (res) {
+      if (res.ok && res.json && res.json.success) {
+        location.reload();
+        return;
+      }
+      const error = (res.json && res.json.error) ? res.json.error : 'HTTP ' + res.status;
+      setHint('');
+      window.alert(Drupal.t('Не удалось выполнить действие: @error', { '@error': error }));
+    }).catch(function (err) {
+      setHint('');
+      window.alert(Drupal.t('Не удалось выполнить действие: @error', { '@error': err.message || err }));
+    });
+  }
+
   // -- Behaviour --------------------------------------------------------------
 
   Drupal.behaviors.codeBlockFieldInlineEditor = {
@@ -2373,6 +2654,18 @@
         const hasInline = document.querySelector('.cbf-host--inline-enabled.cbf-host--mounted');
         if (hasInline && once('cbf-toolbar', 'body').length) {
           buildToolbar();
+          // Close per-block actions dropdowns on outside click / Escape.
+          document.addEventListener('click', function (e) {
+            if (e.target && e.target.closest && e.target.closest('.cbf-block-actions')) {
+              return;
+            }
+            closeBlockMenus();
+          });
+          document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') {
+              closeBlockMenus();
+            }
+          });
         }
       }
     },

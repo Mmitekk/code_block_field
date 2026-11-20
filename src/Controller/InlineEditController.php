@@ -9,6 +9,7 @@ use Drupal\Core\Access\AccessResult;
 use Drupal\Core\Cache\CacheableJsonResponse;
 use Drupal\Core\Controller\ControllerBase;
 use Drupal\Core\Entity\EntityInterface;
+use Drupal\Core\Field\FieldStorageDefinitionInterface;
 use Drupal\Core\Session\AccountInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -26,6 +27,9 @@ use Symfony\Component\HttpFoundation\Request;
  *  - GET  /admin/code-block-field/image-picker/{…}
  *      Opens a Drupal modal with a managed-file form for replacing a single
  *      image inside the inline editor.
+ *  - POST /admin/code-block-field/inline-action
+ *      Clones or deletes a code_block field delta (inline editor actions
+ *      «Клонировать» / «Удалить» from the per-block menu).
  */
 class InlineEditController extends ControllerBase {
 
@@ -180,6 +184,12 @@ class InlineEditController extends ControllerBase {
     if (!is_array($payload)) {
       return new JsonResponse(['error' => 'Invalid JSON payload.'], 400);
     }
+    // Pasted text can carry byte sequences that are not valid UTF-8 (or
+    // lone-surrogate escapes that decode into them). If they reach the
+    // response, json_encode() throws «Malformed UTF-8 characters» and the
+    // save dies with an opaque HTTP 500 — and the broken bytes would be
+    // persisted into the entity. Clean everything up front.
+    $payload = $this->sanitizePayloadUtf8($payload);
     $required = ['entity_type', 'entity_id', 'field_name', 'delta'];
     foreach ($required as $key) {
       if (!array_key_exists($key, $payload)) {
@@ -244,8 +254,66 @@ class InlineEditController extends ControllerBase {
     // Sync file usage.
     $this->syncFileUsage($reconciled, $entity, (array) ($field[$delta]->assets ?? []));
 
-    // Optionally create a new revision (configurable in the module settings).
-    // Only applies to entity types that actually support revisions.
+    $this->applyRevisionPolicy($entity);
+
+    try {
+      // Save the entity (paragraph, node, etc.) directly. For
+      // revisionable entities, Paragraphs module / Drupal core will
+      // create a new revision automatically if the entity type is
+      // configured to do so.
+      $entity->save();
+      $new_revision_id = method_exists($entity, 'getRevisionId') ? $entity->getRevisionId() : NULL;
+    } catch (\Throwable $e) {
+      return new JsonResponse(['error' => 'Save failed: ' . $e->getMessage()], 500);
+    }
+
+    // Update a paragraph parent's revision reference (if any) and
+    // invalidate caches so the change is visible on the next render.
+    [$parent_info, $reference_updated, $tags_to_invalidate] = $this->finalizeAfterSave($entity, $new_revision_id);
+
+    // Log the successful save for debugging.
+    \Drupal::logger('code_block_field')->debug('Inline save: entity_type=@type, entity_id=@id, revision_id=@rid, field=@field, delta=@delta, html_length=@len, html_preview=@preview, parent=@parent, reference_updated=@ru, cache_tags=@tags', [
+      '@type' => $entity->getEntityTypeId(),
+      '@id' => $entity->id(),
+      '@rid' => $new_revision_id ?: '?',
+      '@field' => $payload['field_name'],
+      '@delta' => $delta,
+      '@len' => strlen($filtered_html),
+      '@parent' => $parent_info,
+      '@ru' => $reference_updated ? 'yes' : 'no',
+      '@tags' => implode(',', $tags_to_invalidate),
+      '@preview' => mb_substr($filtered_html, 0, 200),
+    ]);
+
+    $response_data = [
+      'success' => TRUE,
+      'entity_type' => $entity->getEntityTypeId(),
+      'entity_id' => $entity->id(),
+      'revision_id' => $new_revision_id,
+      'field_name' => $payload['field_name'],
+      'delta' => $delta,
+      'html' => $filtered_html,
+      'html_length' => strlen($filtered_html),
+      // mb_substr: substr() is byte-based and would cut a multi-byte
+      // character in half, producing invalid UTF-8 that breaks json_encode.
+      'html_preview' => mb_substr($filtered_html, 0, 200),
+      'assets' => $reconciled,
+      'parent' => $parent_info,
+      'reference_updated' => $reference_updated,
+      'cache_tags_invalidated' => $tags_to_invalidate,
+    ];
+    $response = new CacheableJsonResponse($response_data);
+    $response->addCacheableDependency($entity);
+    return $response;
+  }
+
+  /**
+   * Applies the module's revision policy to an entity before saving.
+   *
+   * Optionally creates a new revision (configurable in the module settings).
+   * Only applies to entity types that actually support revisions.
+   */
+  protected function applyRevisionPolicy(EntityInterface $entity): void {
     $config = $this->config('code_block_field.settings');
     $create_revision = (bool) $config->get('create_revisions');
     if ($create_revision && $entity instanceof \Drupal\Core\Entity\RevisionableInterface) {
@@ -276,37 +344,29 @@ class InlineEditController extends ControllerBase {
         }
       }
     }
+  }
 
-    try {
-      // Save the entity (paragraph, node, etc.) directly. For
-      // revisionable entities, Paragraphs module / Drupal core will
-      // create a new revision automatically if the entity type is
-      // configured to do so.
-      $entity->save();
-      $new_revision_id = method_exists($entity, 'getRevisionId') ? $entity->getRevisionId() : NULL;
-    } catch (\Throwable $e) {
-      return new JsonResponse(['error' => 'Save failed: ' . $e->getMessage()], 500);
-    }
-
-    // CRITICAL: If the entity is a Paragraph and it created a new
-    // revision (revision_id changed), we MUST update the parent
-    // entity's reference (target_revision_id) to point to the new
-    // paragraph revision. Otherwise, on the next page render, Drupal
-    // will load the OLD paragraph revision (the one the parent still
-    // references) and the inline edit will be invisible.
-    //
-    // We do this by:
-    // 1. Loading the parent entity fresh from the database.
-    // 2. Walking every entity-reference field on the parent that
-    //    targets paragraphs.
-    // 3. Finding the field item that references our paragraph (by
-    //    target_id).
-    // 4. Updating its target_revision_id to the new paragraph
-    //    revision ID.
-    // 5. Saving the parent (without forcing a new revision — we just
-    //    want to update the reference).
+  /**
+   * Post-save bookkeeping shared by the inline endpoints.
+   *
+   * CRITICAL: If the entity is a Paragraph and it created a new
+   * revision (revision_id changed), we MUST update the parent
+   * entity's reference (target_revision_id) to point to the new
+   * paragraph revision. Otherwise, on the next page render, Drupal
+   * will load the OLD paragraph revision (the one the parent still
+   * references) and the inline edit will be invisible.
+   *
+   * Also invalidates cache tags for the saved entity AND its parent —
+   * without this Drupal may serve a cached version of the rendered
+   * page that was built before the change.
+   *
+   * @return array
+   *   [parent_info, reference_updated, tags_to_invalidate]
+   */
+  protected function finalizeAfterSave(EntityInterface $entity, $new_revision_id): array {
     $parent_info = 'none';
     $reference_updated = FALSE;
+    $parent = NULL;
     if (method_exists($entity, 'getParentEntity') && $new_revision_id) {
       try {
         // Reload parent fresh from storage to avoid stale data.
@@ -363,71 +423,249 @@ class InlineEditController extends ControllerBase {
           $parent->save();
           $reference_updated = TRUE;
 
-          \Drupal::logger('code_block_field')->debug('Inline save: updated parent @parent reference to paragraph @pid revision @rid', [
+          \Drupal::logger('code_block_field')->debug('Inline update: refreshed parent @parent reference to paragraph @pid revision @rid', [
             '@parent' => $parent_info,
             '@pid' => $paragraph_id,
             '@rid' => $new_revision_id,
           ]);
         }
       } catch (\Throwable $parent_e) {
-        \Drupal::logger('code_block_field')->warning('Inline save: failed to update parent reference: @msg', [
+        \Drupal::logger('code_block_field')->warning('Inline update: failed to refresh parent reference: @msg', [
           '@msg' => $parent_e->getMessage(),
         ]);
       }
     }
 
     // Explicitly invalidate cache tags for the saved entity AND its
-    // parent (if any). Without this, Drupal may serve a cached version
-    // of the rendered page that was built before the inline edit.
+    // parent (if any).
     $tags_to_invalidate = $entity->getCacheTags();
-    if (isset($parent)) {
+    if ($parent) {
       $tags_to_invalidate = array_merge($tags_to_invalidate, $parent->getCacheTags());
-    }
-    // Also invalidate any "view" cache tags for the paragraph — these
-    // are used when the paragraph is rendered through its own view
-    // mode and may not be invalidated by the paragraph:ID tag alone.
-    if (method_exists($entity, 'getCacheTagsToInvalidate')) {
-      // Already covered by getCacheTags().
+      // Also clear the render cache for the parent explicitly.
+      \Drupal::service('cache_tags.invalidator')->invalidateTags($parent->getCacheTags());
     }
     \Drupal::service('cache_tags.invalidator')->invalidateTags($tags_to_invalidate);
 
-    // Also clear the render cache for the parent explicitly.
-    if (isset($parent) && method_exists($parent, 'getCacheTags')) {
-      \Drupal::service('cache_tags.invalidator')->invalidateTags($parent->getCacheTags());
+    return [$parent_info, $reference_updated, $tags_to_invalidate];
+  }
+
+  /**
+   * Access check for the inline-action endpoint (clone / delete).
+   *
+   * Same note as accessSave(): Request must stay optional, otherwise the
+   * access ArgumentsResolver throws HTTP 500.
+   */
+  public function accessAction(AccountInterface $account, ?Request $request = NULL): AccessResult {
+    $request ??= \Drupal::requestStack()->getCurrentRequest();
+    if (!$account->hasPermission('use code block field inline editor')) {
+      return AccessResult::forbidden('Missing inline editor permission.')->cachePerPermissions();
+    }
+    $payload = $request ? json_decode((string) $request->getContent(), TRUE) : NULL;
+    if (!is_array($payload)) {
+      return AccessResult::forbidden('Invalid payload.')->cachePerPermissions();
+    }
+    $entity_type = $payload['entity_type'] ?? '';
+    $entity_id = $payload['entity_id'] ?? 0;
+    $field_name = $payload['field_name'] ?? '';
+    if (!$entity_type || !$entity_id || !$field_name) {
+      return AccessResult::forbidden('Missing entity reference.')->cachePerPermissions();
+    }
+    try {
+      $entity = $this->entityTypeManager()->getStorage($entity_type)->load($entity_id);
+    } catch (\Throwable) {
+      $entity = NULL;
+    }
+    if (!$entity instanceof EntityInterface) {
+      return AccessResult::forbidden('Entity not found.')->cachePerPermissions();
+    }
+    return AccessResult::allowedIfHasPermission($account, 'use code block field inline editor')
+      ->andIf(AccessResult::allowedIf($entity->access('update', $account)))
+      ->cachePerPermissions()
+      ->addCacheableDependency($entity);
+  }
+
+  /**
+   * Clones or deletes a code_block field delta (inline editor actions).
+   *
+   * Payload:
+   * {
+   *   "entity_type": "node",
+   *   "entity_id": 12,
+   *   "field_name": "field_code_block",
+   *   "delta": 2,
+   *   "action": "clone" | "delete"
+   * }
+   *
+   * Only fields with unlimited cardinality accept these actions.
+   */
+  public function action(Request $request): JsonResponse {
+    $payload = json_decode((string) $request->getContent(), TRUE);
+    if (!is_array($payload)) {
+      return new JsonResponse(['error' => 'Invalid JSON payload.'], 400);
+    }
+    $required = ['entity_type', 'entity_id', 'field_name', 'delta', 'action'];
+    foreach ($required as $key) {
+      if (!array_key_exists($key, $payload)) {
+        return new JsonResponse(['error' => sprintf('Missing %s in payload.', $key)], 400);
+      }
+    }
+    $action = (string) $payload['action'];
+    if (!in_array($action, ['clone', 'delete'], TRUE)) {
+      return new JsonResponse(['error' => 'Unknown action.'], 400);
     }
 
-    // Log the successful save for debugging.
-    \Drupal::logger('code_block_field')->debug('Inline save: entity_type=@type, entity_id=@id, revision_id=@rid, field=@field, delta=@delta, html_length=@len, html_preview=@preview, parent=@parent, reference_updated=@ru, cache_tags=@tags', [
+    try {
+      /** @var \Drupal\Core\Entity\ContentEntityInterface $entity */
+      $entity = $this->entityTypeManager()->getStorage($payload['entity_type'])->load($payload['entity_id']);
+    } catch (\Throwable $e) {
+      return new JsonResponse(['error' => 'Entity not found: ' . $e->getMessage()], 404);
+    }
+    if (!$entity) {
+      return new JsonResponse(['error' => 'Entity not found.'], 404);
+    }
+    if (!$entity->hasField($payload['field_name'])) {
+      return new JsonResponse(['error' => 'Field does not exist on entity.'], 400);
+    }
+    $field = $entity->get($payload['field_name']);
+    $delta = (int) $payload['delta'];
+    if (!isset($field[$delta])) {
+      return new JsonResponse(['error' => 'Delta out of range.'], 400);
+    }
+    if ($field->getFieldDefinition()->getType() !== 'code_block') {
+      return new JsonResponse(['error' => 'Field is not a code_block field.'], 400);
+    }
+    $cardinality = $field->getFieldDefinition()->getFieldStorageDefinition()->getCardinality();
+    if ($cardinality !== FieldStorageDefinitionInterface::CARDINALITY_UNLIMITED) {
+      return new JsonResponse(['error' => 'This field does not allow adding or removing items.'], 400);
+    }
+
+    // Field-wide asset fids before the change, for the usage sync below.
+    $fids_before = $this->collectFieldFids($field);
+
+    $this->applyRevisionPolicy($entity);
+
+    if ($action === 'clone') {
+      // Duplicate the item values (html, css, js, assets, priority) and
+      // insert the copy right after the original.
+      $values = $field->getValue();
+      array_splice($values, $delta + 1, 0, [$values[$delta]]);
+      $field->setValue($values);
+      $new_delta = $delta + 1;
+    }
+    else {
+      $field->removeItem($delta);
+      $new_delta = NULL;
+    }
+
+    try {
+      $entity->save();
+      $new_revision_id = method_exists($entity, 'getRevisionId') ? $entity->getRevisionId() : NULL;
+    } catch (\Throwable $e) {
+      return new JsonResponse(['error' => 'Save failed: ' . $e->getMessage()], 500);
+    }
+
+    // Keep the file usage in sync at the entity level: a clone shares the
+    // same files (no change), while deleting the last delta that holds a
+    // file must release the usage entry.
+    $field_after = $entity->get($payload['field_name']);
+    $fids_after = $this->collectFieldFids($field_after);
+    $before_rows = array_map(static function ($fid) {
+      return ['fid' => $fid];
+    }, $fids_before);
+    $after_rows = array_map(static function ($fid) {
+      return ['fid' => $fid];
+    }, $fids_after);
+    if ($fids_before != $fids_after) {
+      $this->syncFileUsage($after_rows, $entity, $before_rows);
+    }
+
+    // Paragraph parent reference + cache invalidation (shared with save()).
+    [$parent_info, , $tags_to_invalidate] = $this->finalizeAfterSave($entity, $new_revision_id);
+
+    \Drupal::logger('code_block_field')->debug('Inline @action: entity_type=@type, entity_id=@id, revision_id=@rid, field=@field, delta=@delta, new_delta=@new_delta, count=@count, parent=@parent', [
+      '@action' => $action,
       '@type' => $entity->getEntityTypeId(),
       '@id' => $entity->id(),
       '@rid' => $new_revision_id ?: '?',
       '@field' => $payload['field_name'],
       '@delta' => $delta,
-      '@len' => strlen($filtered_html),
-      '@preview' => substr($filtered_html, 0, 200),
+      '@new_delta' => $new_delta ?? '-',
+      '@count' => count($field_after),
       '@parent' => $parent_info,
-      '@ru' => $reference_updated ? 'yes' : 'no',
-      '@tags' => implode(',', $tags_to_invalidate),
     ]);
 
-    $response_data = [
+    $response = new CacheableJsonResponse([
       'success' => TRUE,
+      'action' => $action,
       'entity_type' => $entity->getEntityTypeId(),
       'entity_id' => $entity->id(),
-      'revision_id' => $new_revision_id,
       'field_name' => $payload['field_name'],
       'delta' => $delta,
-      'html' => $filtered_html,
-      'html_length' => strlen($filtered_html),
-      'html_preview' => substr($filtered_html, 0, 200),
-      'assets' => $reconciled,
-      'parent' => $parent_info,
-      'reference_updated' => $reference_updated,
-      'cache_tags_invalidated' => $tags_to_invalidate,
-    ];
-    $response = new CacheableJsonResponse($response_data);
+      'new_delta' => $new_delta,
+      'count' => count($field_after),
+      'reload' => TRUE,
+    ]);
     $response->addCacheableDependency($entity);
     return $response;
+  }
+
+  /**
+   * Recursively strips invalid UTF-8 byte sequences from a payload.
+   *
+   * @param mixed $payload
+   *
+   * @return mixed
+   */
+  protected function sanitizePayloadUtf8($payload) {
+    if (is_string($payload)) {
+      return $this->sanitizeUtf8($payload);
+    }
+    if (is_array($payload)) {
+      foreach ($payload as $key => $value) {
+        $payload[$key] = $this->sanitizePayloadUtf8($value);
+      }
+    }
+    return $payload;
+  }
+
+  /**
+   * Removes invalid UTF-8 byte sequences from a string.
+   *
+   * iconv with //IGNORE drops the broken bytes; on a hard failure (broken
+   * locale setups) mb_convert_encoding replaces them with the substitution
+   * character instead.
+   *
+   * @param string $value
+   *
+   * @return string
+   */
+  protected function sanitizeUtf8(string $value): string {
+    if ($value === '' || preg_match('//u', $value)) {
+      return $value;
+    }
+    $clean = @iconv('UTF-8', 'UTF-8//IGNORE', $value);
+    if ($clean === FALSE) {
+      $clean = (string) mb_convert_encoding($value, 'UTF-8', 'UTF-8');
+    }
+    return $clean;
+  }
+
+  /**
+   * Collects the distinct asset fids used across all deltas of a field.
+   *
+   * @return int[]
+   */
+  protected function collectFieldFids($field): array {
+    $fids = [];
+    foreach ($field as $item) {
+      foreach ((array) ($item->assets ?? []) as $asset) {
+        $fid = (int) ($asset['fid'] ?? 0);
+        if ($fid) {
+          $fids[$fid] = $fid;
+        }
+      }
+    }
+    return array_values($fids);
   }
 
   /**

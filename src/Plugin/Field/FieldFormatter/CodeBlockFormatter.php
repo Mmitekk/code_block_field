@@ -179,8 +179,10 @@ class CodeBlockFormatter extends FormatterBase {
           'endpoints' => [
             'save' => Url::fromRoute('code_block_field.inline_save')->toString(),
             'upload' => Url::fromRoute('code_block_field.image_upload')->toString(),
+            'action' => Url::fromRoute('code_block_field.inline_action')->toString(),
           ],
           'csrf_token' => \Drupal::csrfToken()->get('/admin/code-block-field/inline-save'),
+          'csrf_token_action' => \Drupal::csrfToken()->get('/admin/code-block-field/inline-action'),
           'colors' => [
             'toolbar_bg' => $config->get('color_toolbar_bg') ?? '#1e1e2e',
             'toolbar_accent' => $config->get('color_toolbar_accent') ?? '#ff8a3d',
