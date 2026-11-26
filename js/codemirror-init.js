@@ -33,6 +33,12 @@
           },
         });
 
+        // Keep the underlying textarea in sync on every edit so Drupal AJAX
+        // forms (e.g. Layout Builder) serialize the latest CodeMirror content.
+        editor.on('change', function () {
+          editor.save();
+        });
+
         // Ensure the editor’s value is synced back to the textarea on submit.
         const form = textarea.form;
         if (form) {
